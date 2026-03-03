@@ -414,21 +414,20 @@
 
          <!-- Add Student Modal -->
          <div id="modal-add-student" class="hidden fixed inset-0 modal-overlay z-40 flex items-center justify-center p-4">
-            <div class="bg-white rounded-lg shadow-xl max-w-sm w-full p-6 relative">
+            <div class="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 relative">
                 <button onclick="closeModal('modal-add-student')" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
                    <i class="fas fa-times"></i>
                </button>
-               <h3 class="text-lg font-bold mb-4 border-b pb-2">新增學生至 <span id="add-student-class-label" class="text-blue-600"></span></h3>
+               <h3 class="text-lg font-bold mb-4 border-b pb-2">批次新增學生至 <span id="add-student-class-label" class="text-blue-600"></span></h3>
                <div class="space-y-3">
-                   <div>
-                       <label class="block text-sm font-medium">學號 (登入帳號)</label>
-                       <input type="text" id="new-student-id" class="w-full border rounded p-2 mt-1">
+                   <div class="text-sm text-gray-600 mb-2">
+                       請在下方貼上學生名單，每行一筆。<br>格式：<strong>學號 姓名</strong>（中間以空格或 Tab 分隔）<br>
+                       系統會自動為每位學生產生 <strong>6 碼數字</strong> 的預設密碼。
                    </div>
                    <div>
-                       <label class="block text-sm font-medium">學生姓名</label>
-                       <input type="text" id="new-student-name" class="w-full border rounded p-2 mt-1">
+                       <textarea id="new-student-batch-data" rows="8" class="w-full border rounded p-2" placeholder="S001 王小明&#10;S002 陳小華&#10;S003 林小美"></textarea>
                    </div>
-                   <button onclick="submitNewStudent()" class="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700 mt-4">確定新增</button>
+                   <button onclick="submitNewStudent()" class="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700 mt-4">確定批次新增</button>
                </div>
             </div>
        </div>
@@ -991,31 +990,49 @@
 
             function showAddStudentModal() {
                 if(!currentClassCode) return messageBox('請先選擇班級');
+                document.getElementById('new-student-batch-data').value = '';
                 showModal('modal-add-student');
             }
 
             async function submitNewStudent() {
-                const id = document.getElementById('new-student-id').value.trim();
-                const name = document.getElementById('new-student-name').value.trim();
-                if(!id || !name) return messageBox('請填寫完整');
+                const text = document.getElementById('new-student-batch-data').value.trim();
+                if(!text) return messageBox('請輸入學生資料');
                 
-                // Auto generate 6 chars password
-                const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // omit confusing chars like O,0,I,1
-                let pwd = '';
-                for(let i=0; i<6; i++) pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+                const lines = text.split('\n');
+                const students = [];
 
-                showLoading('新增中...');
-                const res = await callAPI('addStudent', { classCode: currentClassCode, studentId: id, studentName: name, password: pwd });
+                for(let line of lines) {
+                    line = line.trim();
+                    if(!line) continue;
+                    // 支援空白或 tab 分隔 (可直接從 Excel 複製貼上)
+                    const parts = line.split(/[\s\t]+/);
+                    if(parts.length >= 2) {
+                        const id = parts[0];
+                        const name = parts[1];
+                        
+                        // 產生 6 碼數字密碼
+                        let pwd = '';
+                        for(let i=0; i<6; i++) {
+                            pwd += Math.floor(Math.random() * 10).toString();
+                        }
+                        
+                        students.push({ id, name, password: pwd });
+                    }
+                }
+
+                if(students.length === 0) return messageBox('解析不到有效的學生資料，請確認格式。');
+
+                showLoading('批次新增中...');
+                const res = await callAPI('addStudentsBatch', { classCode: currentClassCode, students: students });
                 hideLoading();
 
                 if(res && res.success) {
                     closeModal('modal-add-student');
                     // refresh list
                     loadClassStudents(currentClassCode, document.getElementById('add-student-class-label').innerText);
-                    document.getElementById('new-student-id').value = '';
-                    document.getElementById('new-student-name').value = '';
+                    messageBox(res.message);
                 } else {
-                    messageBox(res.message, true);
+                    messageBox(res ? res.message : '新增失敗', true);
                 }
             }
 
