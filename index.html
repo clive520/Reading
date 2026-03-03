@@ -1,416 +1,1620 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>閱讀認證系統 - 教室管理版</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/@phosphor-icons/web"></script>
-  <style>
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; }
-    .view-section { display: none; animation: fadeIn 0.3s ease-in-out; }
-    .view-section.active { display: block; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    #drawing-canvas { border: 2px dashed #cbd5e1; border-radius: 0.5rem; touch-action: none; background-color: #fff; cursor: crosshair; }
-  </style>
-</head>
-<body class="text-gray-800">
+    <html lang="zh-TW">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>雲端閱讀認證測驗系統</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+        <!-- Markdown Parser for AI generated content -->
+        <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+        <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; }
+            .modal-overlay { background-color: rgba(0, 0, 0, 0.5); }
+            /* Hide scrollbar for clean UI but keep functionality */
+            .no-scrollbar::-webkit-scrollbar { display: none; }
+            .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+            #drawing-canvas { border: 2px dashed #cbd5e1; border-radius: 0.5rem; touch-action: none; background-color: white;}
+            .markdown-content h1 { font-size: 1.5rem; font-weight: bold; margin-top: 1rem; margin-bottom: 0.5rem; }
+            .markdown-content h2 { font-size: 1.25rem; font-weight: bold; margin-top: 1rem; margin-bottom: 0.5rem; }
+            .markdown-content p { margin-bottom: 0.5rem; line-height: 1.6; }
+            .markdown-content ul { list-style-type: disc; margin-left: 1.5rem; margin-bottom: 0.5rem; }
+        </style>
+    </head>
+    <body class="text-gray-800 h-screen flex flex-col">
 
-  <!-- 導覽列 -->
-  <nav class="bg-blue-600 text-white shadow-md p-4 flex justify-between items-center sticky top-0 z-40">
-    <div class="flex items-center gap-2 font-bold text-xl">
-      <i class="ph-fill ph-book-open-text text-2xl"></i>
-      閱讀認證小幫手 (本機測試版)
-    </div>
-    <div class="flex items-center gap-3">
-      <button onclick="clearAllData()" class="hover:bg-red-500 p-2 rounded text-sm transition bg-red-400">重置所有資料</button>
-      <button id="logout-btn" onclick="logout()" class="hidden bg-red-500 hover:bg-red-600 px-3 py-1 rounded text-sm transition">登出</button>
-    </div>
-  </nav>
+        <!-- Header -->
+        <header class="bg-blue-600 text-white shadow-md p-4 flex justify-between items-center z-10">
+            <h1 class="text-xl font-bold flex items-center">
+                <i class="fas fa-book-reader mr-2"></i> 雲端閱讀認證測驗系統
+            </h1>
+            <div class="flex items-center space-x-4">
+                <div id="user-info" class="hidden text-sm font-medium"></div>
+                <button onclick="showSettingsModal()" class="hover:text-blue-200 transition" title="系統設定">
+                    <i class="fas fa-cog text-xl"></i>
+                </button>
+                <button onclick="showHelpModal()" class="hover:text-blue-200 transition" title="系統說明">
+                    <i class="fas fa-info-circle text-xl"></i>
+                </button>
+                <button id="logout-btn" onclick="logout()" class="hidden bg-red-500 hover:bg-red-600 px-3 py-1 rounded text-sm transition">
+                    登出
+                </button>
+            </div>
+        </header>
 
-  <!-- 全局提示框 -->
-  <div id="msg-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
-    <div class="bg-white rounded-lg p-6 max-w-sm w-full shadow-xl text-center m-4">
-      <div id="msg-icon" class="text-4xl mb-3 text-blue-500"><i class="ph-fill ph-info"></i></div>
-      <h3 id="msg-title" class="text-lg font-bold mb-2">提示</h3>
-      <p id="msg-content" class="text-gray-600 mb-5"></p>
-      <button onclick="closeMsgModal()" class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition">確定</button>
-    </div>
-  </div>
-
-  <main class="container mx-auto p-4 max-w-4xl mt-4">
-    
-    <!-- ==================== 視圖 1: 登入 ==================== -->
-    <section id="view-login" class="view-section active max-w-md mx-auto bg-white p-8 rounded-xl shadow-sm border border-gray-100">
-      <div class="flex justify-center mb-6 border-b pb-2 gap-4">
-        <button id="tab-student" onclick="switchLoginTab('student')" class="text-lg font-bold text-blue-600 border-b-2 border-blue-600 px-2 pb-1">我是學生</button>
-        <button id="tab-teacher" onclick="switchLoginTab('teacher')" class="text-lg font-bold text-gray-400 px-2 pb-1">我是老師</button>
-      </div>
-      
-      <form id="login-form" onsubmit="handleLogin(event)" class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1" id="lbl-account">學生帳號</label>
-          <input type="text" id="login-account" required class="w-full p-3 border rounded-lg focus:ring focus:ring-blue-200">
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">密碼</label>
-          <input type="password" id="login-password" required class="w-full p-3 border rounded-lg focus:ring focus:ring-blue-200">
-        </div>
-        <button type="submit" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700 transition">登入系統</button>
-      </form>
-      
-      <div id="teacher-hint" class="mt-4 text-xs text-center text-gray-500 hidden">
-        (測試版預設教師帳號: admin / 密碼: admin)
-      </div>
-    </section>
-
-    <!-- ==================== 視圖 2: 教師後台 ==================== -->
-    <section id="view-teacher" class="view-section">
-      <div class="bg-white p-6 rounded-xl shadow-sm mb-6 flex justify-between items-center">
-        <div>
-          <h2 class="text-2xl font-bold text-gray-800">教師管理後台</h2>
-          <p class="text-gray-500" id="teacher-welcome">歡迎回來，老師！</p>
-        </div>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <!-- 左側：班級列表 -->
-        <div class="col-span-1 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-          <h3 class="font-bold text-lg mb-4 flex items-center justify-between">
-            <span>班級列表</span>
-            <button onclick="addClass()" class="text-sm bg-blue-100 text-blue-600 px-2 py-1 rounded hover:bg-blue-200"><i class="ph ph-plus"></i> 新增</button>
-          </h3>
-          <ul id="class-list" class="space-y-2">
-            <!-- 班級列表動態生成 -->
-          </ul>
-        </div>
-
-        <!-- 右側：學生管理 -->
-        <div class="col-span-1 md:col-span-2 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-          <div id="student-manager-empty" class="text-center text-gray-400 py-10">
-            請先從左側選擇一個班級以管理學生。
-          </div>
-          
-          <div id="student-manager-content" class="hidden">
-            <h3 class="font-bold text-lg mb-2 flex items-center justify-between">
-              <span id="current-class-name-display">目前班級：--</span>
-              <button onclick="editCurrentClass()" class="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded hover:bg-gray-200">修改班級名稱</button>
-            </h3>
+        <!-- Main Content Area -->
+        <main class="flex-grow overflow-hidden relative">
             
-            <div class="bg-blue-50 p-4 rounded-lg mb-4 flex flex-col gap-2">
-              <h4 class="font-bold text-blue-800 text-sm">批次新增學生</h4>
-              <div class="flex gap-2">
-                 <input type="number" id="batch-student-count" min="1" max="50" value="5" class="w-20 p-2 border rounded" placeholder="數量">
-                 <input type="text" id="batch-student-prefix" class="flex-1 p-2 border rounded" placeholder="帳號前綴 (例: S01)">
-                 <button onclick="batchCreateStudents()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">批次建立</button>
-              </div>
-              <p class="text-xs text-blue-600">系統將自動產生帳號 (前綴+編號) 與隨機 6 碼密碼。</p>
+            <!-- View 1: 登入/註冊入口 -->
+            <div id="view-portal" class="absolute inset-0 overflow-y-auto p-4 flex items-center justify-center">
+                <div class="bg-white rounded-xl shadow-lg p-8 max-w-md w-full">
+                    <div class="text-center mb-6">
+                        <i class="fas fa-graduation-cap text-4xl text-blue-500 mb-2"></i>
+                        <h2 class="text-2xl font-bold text-gray-700">歡迎使用系統</h2>
+                        <p class="text-sm text-gray-500 mt-1">請選擇您的身分登入</p>
+                    </div>
+
+                    <!-- 身分選擇 Tab -->
+                    <div class="flex mb-6 border-b border-gray-200">
+                        <button onclick="switchPortalTab('student')" id="tab-student" class="flex-1 py-2 text-center border-b-2 border-blue-500 text-blue-600 font-semibold transition">
+                            <i class="fas fa-child mr-1"></i> 我是學生
+                        </button>
+                        <button onclick="switchPortalTab('teacher')" id="tab-teacher" class="flex-1 py-2 text-center border-b-2 border-transparent text-gray-500 hover:text-blue-500 transition">
+                            <i class="fas fa-chalkboard-teacher mr-1"></i> 我是老師
+                        </button>
+                    </div>
+
+                    <!-- 學生登入表單 -->
+                    <div id="form-student" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">學生帳號(學號)</label>
+                            <input type="text" id="login-student-account" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">密碼</label>
+                            <input type="password" id="login-student-password" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border">
+                        </div>
+                        <button onclick="handleLogin('student')" class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition flex justify-center items-center">
+                            登入
+                        </button>
+                    </div>
+
+                    <!-- 老師登入/註冊表單 -->
+                    <div id="form-teacher" class="hidden space-y-4">
+                        <div id="teacher-login-mode">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">教師帳號 (Email/ID)</label>
+                                <input type="text" id="login-teacher-account" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border">
+                            </div>
+                            <div class="mt-4">
+                                <label class="block text-sm font-medium text-gray-700">密碼</label>
+                                <input type="password" id="login-teacher-password" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border">
+                            </div>
+                            <button onclick="handleLogin('teacher')" class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 transition mt-6">
+                                登入
+                            </button>
+                            <div class="text-center mt-4">
+                                <a href="#" onclick="toggleTeacherRegMode(true)" class="text-sm text-indigo-600 hover:underline">第一次使用？點此註冊新帳號</a>
+                            </div>
+                        </div>
+
+                        <div id="teacher-reg-mode" class="hidden">
+                            <h3 class="font-bold text-gray-700 mb-2 border-b pb-2">註冊新教師帳號</h3>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">設定帳號 (Email/ID)</label>
+                                <input type="text" id="reg-teacher-account" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border">
+                            </div>
+                            <div class="mt-3">
+                                <label class="block text-sm font-medium text-gray-700">設定密碼</label>
+                                <input type="password" id="reg-teacher-password" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border">
+                            </div>
+                            <div class="mt-3">
+                                <label class="block text-sm font-medium text-gray-700">真實姓名</label>
+                                <input type="text" id="reg-teacher-name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border">
+                            </div>
+                            <button onclick="handleTeacherRegister()" class="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 transition mt-6">
+                                註冊
+                            </button>
+                            <div class="text-center mt-4">
+                                <a href="#" onclick="toggleTeacherRegMode(false)" class="text-sm text-gray-500 hover:underline">返回登入</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <div class="overflow-x-auto">
-              <table class="w-full text-left text-sm border-collapse">
-                <thead>
-                  <tr class="bg-gray-100">
-                    <th class="p-2 border-b">學生帳號</th>
-                    <th class="p-2 border-b">姓名</th>
-                    <th class="p-2 border-b">密碼 (點擊可見)</th>
-                    <th class="p-2 border-b w-24">操作</th>
-                  </tr>
-                </thead>
-                <tbody id="student-list-tbody">
-                  <!-- 學生列表動態生成 -->
-                </tbody>
-              </table>
+            <!-- View 2: 教師後台 (Teacher Dashboard) -->
+            <div id="view-teacher" class="hidden absolute inset-0 flex">
+                <!-- Sidebar -->
+                <div class="w-64 bg-gray-800 text-white flex flex-col h-full shrink-0">
+                    <div class="p-4 bg-gray-900 border-b border-gray-700">
+                        <h2 class="font-bold text-lg"><i class="fas fa-toolbox mr-2"></i> 教師管理後台</h2>
+                    </div>
+                    <nav class="flex-grow p-4 space-y-2">
+                        <button onclick="switchTeacherMenu('classes')" class="w-full text-left px-4 py-2 rounded bg-gray-700 hover:bg-gray-600 transition t-menu-btn" id="t-menu-classes">
+                            <i class="fas fa-users mr-2 w-5"></i> 班級與學生管理
+                        </button>
+                        <button onclick="switchTeacherMenu('articles')" class="w-full text-left px-4 py-2 rounded hover:bg-gray-600 transition t-menu-btn" id="t-menu-articles">
+                            <i class="fas fa-file-alt mr-2 w-5"></i> 題庫與文章管理
+                        </button>
+                        <button onclick="switchTeacherMenu('records')" class="w-full text-left px-4 py-2 rounded hover:bg-gray-600 transition t-menu-btn" id="t-menu-records">
+                            <i class="fas fa-chart-bar mr-2 w-5"></i> 測驗成果檢視
+                        </button>
+                    </nav>
+                </div>
+
+                <!-- Main Content Area -->
+                <div class="flex-grow bg-gray-100 overflow-y-auto p-6 relative">
+                    
+                    <!-- Content: Classes -->
+                    <div id="t-content-classes" class="t-content-section hidden">
+                        <div class="flex justify-between items-center mb-6">
+                            <h2 class="text-2xl font-bold text-gray-800">班級與學生管理</h2>
+                            <button onclick="showModal('modal-add-class')" class="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 transition">
+                                <i class="fas fa-plus mr-1"></i> 新增班級
+                            </button>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <!-- Class List (Left 1/3) -->
+                            <div class="bg-white p-4 rounded-lg shadow col-span-1">
+                                <h3 class="font-bold text-lg mb-4 border-b pb-2">我的班級列表</h3>
+                                <ul id="class-list" class="space-y-2">
+                                    <!-- Dynamic content -->
+                                </ul>
+                            </div>
+                            <!-- Student List (Right 2/3) -->
+                            <div class="bg-white p-4 rounded-lg shadow col-span-2">
+                                <div class="flex justify-between items-center mb-4 border-b pb-2">
+                                    <h3 class="font-bold text-lg" id="current-class-title">請選擇班級以查看學生</h3>
+                                    <button id="btn-add-student" onclick="showAddStudentModal()" class="hidden bg-green-600 text-white px-3 py-1 text-sm rounded shadow hover:bg-green-700 transition">
+                                        <i class="fas fa-user-plus mr-1"></i> 新增學生
+                                    </button>
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table class="min-w-full divide-y divide-gray-200">
+                                        <thead class="bg-gray-50">
+                                            <tr>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">學號</th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">姓名</th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">密碼</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="student-list" class="bg-white divide-y divide-gray-200">
+                                            <!-- Dynamic content -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Content: Articles & Questions -->
+                    <div id="t-content-articles" class="t-content-section hidden">
+                        <div class="flex justify-between items-center mb-6">
+                            <h2 class="text-2xl font-bold text-gray-800">題庫與文章管理</h2>
+                            <button onclick="showModal('modal-add-article')" class="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 transition">
+                                <i class="fas fa-plus mr-1"></i> 新增文章
+                            </button>
+                        </div>
+                        <div class="bg-white rounded-lg shadow overflow-hidden">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">文章編號</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">文章標題</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="teacher-article-list" class="bg-white divide-y divide-gray-200">
+                                    <!-- Dynamic content -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Content: Records -->
+                    <div id="t-content-records" class="t-content-section hidden">
+                        <h2 class="text-2xl font-bold text-gray-800 mb-6">測驗成果檢視</h2>
+                        <div class="bg-white p-4 rounded-lg shadow mb-6 flex space-x-4 items-end">
+                            <div class="flex-1">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">篩選班級</label>
+                                <select id="filter-class" class="w-full border border-gray-300 rounded p-2" onchange="loadTestRecords()">
+                                    <option value="all">全部班級</option>
+                                </select>
+                            </div>
+                             <div class="flex-1">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">篩選文章</label>
+                                <select id="filter-article" class="w-full border border-gray-300 rounded p-2" onchange="loadTestRecords()">
+                                    <option value="all">全部文章</option>
+                                </select>
+                            </div>
+                            <button onclick="loadTestRecords()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded transition">
+                                <i class="fas fa-sync-alt"></i> 重新整理
+                            </button>
+                        </div>
+
+                        <div class="bg-white rounded-lg shadow overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">時間</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">學號</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">文章編號</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">客觀分數</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="test-records-list" class="bg-white divide-y divide-gray-200 text-sm">
+                                    <!-- Dynamic content -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
             </div>
-          </div>
+
+            <!-- View 3: 學生前台 (Student Dashboard) -->
+            <div id="view-student" class="hidden absolute inset-0 bg-gray-50 overflow-y-auto p-4 md:p-8">
+                <div class="max-w-4xl mx-auto space-y-6">
+                    <!-- Welcome & Article Selection -->
+                    <div class="bg-white p-6 rounded-xl shadow-md flex flex-col md:flex-row justify-between items-center">
+                        <div>
+                            <h2 class="text-2xl font-bold text-gray-800" id="student-welcome-msg">歡迎同學</h2>
+                            <p class="text-gray-500 text-sm mt-1">請選擇一篇文章開始閱讀與測驗</p>
+                        </div>
+                        <div class="mt-4 md:mt-0 w-full md:w-64">
+                            <select id="student-article-select" class="w-full border border-gray-300 rounded-md p-2 text-gray-700 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200" onchange="loadStudentArticleTest()">
+                                <option value="">-- 請選擇文章 --</option>
+                                <!-- Dynamic content -->
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Test Area (Hidden initially) -->
+                    <div id="student-test-area" class="hidden space-y-6">
+                        <!-- Article Content -->
+                        <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-500">
+                            <h3 id="test-article-title" class="text-2xl font-bold text-center mb-6 pb-2 border-b"></h3>
+                            <div id="test-article-content" class="text-gray-700 leading-relaxed markdown-content"></div>
+                        </div>
+
+                        <!-- Questions Form -->
+                        <div class="bg-white p-6 rounded-xl shadow-md">
+                            <h4 class="text-xl font-bold text-gray-800 mb-4 border-l-4 border-blue-500 pl-2">測驗開始</h4>
+                            <form id="student-test-form" onsubmit="event.preventDefault(); submitTest();">
+                                
+                                <div id="questions-container" class="space-y-8">
+                                    <!-- Dynamic questions loaded here -->
+                                </div>
+
+                                <!-- Proof Upload -->
+                                <div class="mt-8 p-4 bg-gray-50 rounded border border-gray-200">
+                                    <h5 class="font-bold mb-2">上傳閱讀證明 (可選)</h5>
+                                    <p class="text-xs text-gray-500 mb-2">請拍照上傳您閱讀本書的證明，系統會自動壓縮圖片。</p>
+                                    <input type="file" id="proof-upload" accept="image/*" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" onchange="handleProofImage(event)">
+                                    <input type="hidden" id="proof-base64">
+                                    <img id="proof-preview" class="mt-2 max-w-xs rounded hidden" />
+                                </div>
+
+                                <div class="mt-8 flex justify-center">
+                                    <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-full shadow-lg transition transform hover:scale-105">
+                                        <i class="fas fa-paper-plane mr-2"></i> 提交測驗
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- --- Modals --- -->
+
+        <!-- Loading Overlay -->
+        <div id="loading-overlay" class="hidden fixed inset-0 modal-overlay z-50 flex flex-col items-center justify-center text-white">
+            <i class="fas fa-spinner fa-spin text-5xl mb-4"></i>
+            <p id="loading-text" class="text-lg font-bold">處理中...</p>
         </div>
-      </div>
-    </section>
 
-    <!-- ==================== 視圖 3: 學生前台 ==================== -->
-    <section id="view-student" class="view-section">
-      <div class="bg-white p-6 rounded-xl shadow-sm mb-6 text-center py-20">
-        <h2 class="text-3xl font-bold text-green-600 mb-2" id="student-welcome">歡迎！</h2>
-        <p class="text-gray-500 text-lg">學生測驗區建置中...</p>
-        <p class="text-gray-400 mt-4">請使用您分配到的帳號密碼登入。</p>
-      </div>
-    </section>
+        <!-- Settings Modal -->
+        <div id="modal-settings" class="hidden fixed inset-0 modal-overlay z-40 flex items-center justify-center p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6 relative">
+                <button onclick="closeModal('modal-settings')" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+                <h3 class="text-xl font-bold mb-4 flex items-center"><i class="fas fa-cog mr-2 text-gray-500"></i> 系統設定</h3>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Google Apps Script Web App URL</label>
+                        <input type="password" id="setting-gas-url" placeholder="https://script.google.com/macros/s/..." class="w-full border rounded p-2 text-sm">
+                        <p class="text-xs text-red-500 mt-1">※ 必須填寫，否則系統無法運作</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Gemini API Key (選填，用於 AI 生成)</label>
+                        <input type="password" id="setting-api-key" placeholder="AI Studio API Key" class="w-full border rounded p-2 text-sm">
+                        <p class="text-xs text-gray-500 mt-1">在 Canvas 預覽環境中可留空免 Key 測試</p>
+                    </div>
+                </div>
+                
+                <div class="mt-6 flex justify-between">
+                    <button onclick="resetSettings()" class="text-red-500 hover:text-red-700 text-sm font-medium px-3 py-2 rounded hover:bg-red-50 transition">
+                        清除所有設定
+                    </button>
+                    <button onclick="saveSettings()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">
+                        儲存設定
+                    </button>
+                </div>
+            </div>
+        </div>
 
-  </main>
+        <!-- Help Modal -->
+        <div id="modal-help" class="hidden fixed inset-0 modal-overlay z-40 flex items-center justify-center p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col relative">
+                 <button onclick="closeModal('modal-help')" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 z-10">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+                <div class="p-6 border-b">
+                    <h3 class="text-xl font-bold flex items-center"><i class="fas fa-info-circle mr-2 text-blue-500"></i> 系統說明與部署教學</h3>
+                </div>
+                <div class="p-6 overflow-y-auto flex-grow prose max-w-none text-sm">
+                    <h4>第一步：建立 Google Apps Script</h4>
+                    <ol>
+                        <li>開啟 Google 雲端硬碟，新增一個「Google 試算表」。</li>
+                        <li>在試算表選單點擊「擴充功能」 > 「Apps Script」。</li>
+                        <li>將下方的程式碼複製並貼上到 `Code.gs` 中。</li>
+                    </ol>
+                    
+                    <h4>第二步：初始化與部署</h4>
+                    <ol>
+                        <li>在 Apps Script 編輯器上方選擇 `initSystem` 函式並點擊「執行」。(需授權)</li>
+                        <li>點擊右上角「部署」 > 「新增部署作業」。</li>
+                        <li>選擇類型：「網頁應用程式」。</li>
+                        <li>執行身分：「我」；存取權限：「所有人」。</li>
+                        <li>部署完成後，複製「網頁應用程式網址」。</li>
+                        <li>回到本系統，點擊右上角齒輪 ⚙️，貼上網址並儲存。</li>
+                    </ol>
 
-  <script>
-    /* =========================================
-       資料狀態管理 (In-Memory / LocalStorage)
-    ========================================= */
-    // 預設資料結構
-    const defaultData = {
-      teachers: [{ account: 'admin', password: 'admin', name: '管理員' }],
-      classes: [], // { id: 'c1', name: '一年甲班' }
-      students: [] // { account: 'S0101', name: '王小明', password: 'abc', classId: 'c1' }
-    };
+                    <div class="mt-4 border p-4 rounded bg-gray-50 relative">
+                        <h4 class="mt-0">後端程式碼 (Code.gs)</h4>
+                        <button onclick="copyCode()" class="absolute top-2 right-2 bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded text-xs">
+                            <i class="fas fa-copy"></i> 複製代碼
+                        </button>
+                        <pre class="text-xs overflow-x-auto p-2 bg-gray-800 text-green-400 rounded mt-2 max-h-48" id="code-block">
+// 請將此段文字替換為上一區塊產生的 Code.gs 內容
+// (實作時會透過 JS 將內容填入)
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-    // 初始化資料
-    let db = JSON.parse(localStorage.getItem('readingAppDB')) || defaultData;
-    
-    function saveDB() {
-      localStorage.setItem('readingAppDB', JSON.stringify(db));
-    }
+        <!-- Add Class Modal -->
+        <div id="modal-add-class" class="hidden fixed inset-0 modal-overlay z-40 flex items-center justify-center p-4">
+             <div class="bg-white rounded-lg shadow-xl max-w-sm w-full p-6 relative">
+                 <button onclick="closeModal('modal-add-class')" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+                <h3 class="text-lg font-bold mb-4 border-b pb-2">新增班級</h3>
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-sm font-medium">班級代碼 (例: C001)</label>
+                        <input type="text" id="new-class-code" class="w-full border rounded p-2 mt-1 uppercase">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium">班級名稱 (例: 一年甲班)</label>
+                        <input type="text" id="new-class-name" class="w-full border rounded p-2 mt-1">
+                    </div>
+                    <button onclick="submitNewClass()" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 mt-4">確定新增</button>
+                </div>
+             </div>
+        </div>
 
-    const STATE = {
-      user: null,
-      role: 'student',
-      loginTab: 'student',
-      currentClassId: null
-    };
+         <!-- Add Student Modal -->
+         <div id="modal-add-student" class="hidden fixed inset-0 modal-overlay z-40 flex items-center justify-center p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-sm w-full p-6 relative">
+                <button onclick="closeModal('modal-add-student')" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+                   <i class="fas fa-times"></i>
+               </button>
+               <h3 class="text-lg font-bold mb-4 border-b pb-2">新增學生至 <span id="add-student-class-label" class="text-blue-600"></span></h3>
+               <div class="space-y-3">
+                   <div>
+                       <label class="block text-sm font-medium">學號 (登入帳號)</label>
+                       <input type="text" id="new-student-id" class="w-full border rounded p-2 mt-1">
+                   </div>
+                   <div>
+                       <label class="block text-sm font-medium">學生姓名</label>
+                       <input type="text" id="new-student-name" class="w-full border rounded p-2 mt-1">
+                   </div>
+                   <button onclick="submitNewStudent()" class="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700 mt-4">確定新增</button>
+               </div>
+            </div>
+       </div>
 
-    window.onload = () => { checkLoginState(); };
+       <!-- Add Article Modal (Manual / AI) -->
+       <div id="modal-add-article" class="hidden fixed inset-0 modal-overlay z-40 flex items-center justify-center p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col relative">
+                <button onclick="closeModal('modal-add-article')" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 z-10">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+                <div class="p-6 border-b flex justify-between items-center bg-gray-50 rounded-t-lg">
+                    <h3 class="text-xl font-bold">新增文章與題目</h3>
+                    <div class="space-x-2">
+                         <button onclick="switchArticleMode('manual')" id="btn-mode-manual" class="px-3 py-1 bg-blue-600 text-white rounded text-sm">手動建立</button>
+                         <button onclick="switchArticleMode('ai')" id="btn-mode-ai" class="px-3 py-1 bg-gray-200 text-gray-700 rounded text-sm"><i class="fas fa-robot text-purple-600"></i> AI 助手</button>
+                    </div>
+                </div>
+                
+                <div class="p-6 overflow-y-auto flex-grow">
+                    <!-- Manual Mode -->
+                    <div id="article-mode-manual" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">文章標題</label>
+                            <input type="text" id="manual-article-title" class="w-full border rounded p-2">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">文章內容</label>
+                            <textarea id="manual-article-content" rows="6" class="w-full border rounded p-2"></textarea>
+                        </div>
+                        <div class="border-t pt-4">
+                            <h4 class="font-bold mb-2">批次新增題目 (可選)</h4>
+                            <p class="text-xs text-gray-500 mb-2">手動建立文章後，可於列表頁點擊「管理題目」逐一新增。此處暫不提供手動批次輸入。</p>
+                        </div>
+                    </div>
 
-    /* =========================================
-       UI 共用工具
-    ========================================= */
-    function showMsg(title, content, type = 'info') {
-      document.getElementById('msg-title').innerText = title;
-      document.getElementById('msg-content').innerText = content;
-      document.getElementById('msg-icon').innerHTML = type === 'error' ? '<i class="ph-fill ph-warning-circle text-red-500"></i>' : (type === 'success' ? '<i class="ph-fill ph-check-circle text-green-500"></i>' : '<i class="ph-fill ph-info text-blue-500"></i>');
-      document.getElementById('msg-modal').classList.remove('hidden');
-    }
-    function closeMsgModal() { document.getElementById('msg-modal').classList.add('hidden'); }
-    function switchView(viewId) {
-      document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
-      document.getElementById(viewId).classList.add('active');
-    }
+                    <!-- AI Mode -->
+                    <div id="article-mode-ai" class="hidden space-y-4">
+                        <div class="bg-purple-50 border border-purple-200 p-4 rounded-lg mb-4">
+                            <h4 class="font-bold text-purple-800 mb-2"><i class="fas fa-magic"></i> AI 參數設定</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium">文章主題</label>
+                                    <input type="text" id="ai-topic" placeholder="例：光合作用、龜兔賽跑" class="w-full border rounded p-2 mt-1">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium">文章風格</label>
+                                    <select id="ai-style" class="w-full border rounded p-2 mt-1">
+                                        <option value="科普知識">科普知識</option>
+                                        <option value="童話故事">童話故事</option>
+                                        <option value="歷史事件">歷史事件</option>
+                                        <option value="新聞報導">新聞報導</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium">字數限制 (大約)</label>
+                                    <input type="number" id="ai-words" value="300" class="w-full border rounded p-2 mt-1">
+                                </div>
+                            </div>
+                            
+                            <h4 class="font-bold text-purple-800 mt-4 mb-2 border-t border-purple-200 pt-2">生成題目數量</h4>
+                            <div class="grid grid-cols-4 gap-4">
+                                <div><label class="text-xs">是非題</label><input type="number" id="ai-q-tf" value="2" min="0" class="w-full border rounded p-1"></div>
+                                <div><label class="text-xs">選擇題</label><input type="number" id="ai-q-choice" value="2" min="0" class="w-full border rounded p-1"></div>
+                                <div><label class="text-xs">問答題</label><input type="number" id="ai-q-qa" value="1" min="0" class="w-full border rounded p-1"></div>
+                                <div><label class="text-xs">塗鴉題</label><input type="number" id="ai-q-draw" value="1" min="0" class="w-full border rounded p-1"></div>
+                            </div>
+                            
+                            <button onclick="generateArticleByAI()" class="w-full bg-purple-600 text-white py-2 rounded hover:bg-purple-700 mt-4 font-bold">
+                                <i class="fas fa-brain mr-1"></i> 開始 AI 生成
+                            </button>
+                        </div>
 
-    function clearAllData() {
-      if(confirm('警告：確定要刪除所有本機測試資料嗎？')) {
-        localStorage.removeItem('readingAppDB');
-        location.reload();
-      }
-    }
+                        <!-- AI Result Preview -->
+                        <div id="ai-preview-area" class="hidden border border-gray-200 rounded p-4 bg-gray-50">
+                            <h4 class="font-bold border-b pb-2 mb-2 flex justify-between">
+                                AI 生成預覽 
+                                <span class="text-xs font-normal text-gray-500">請確認無誤後點擊最下方儲存</span>
+                            </h4>
+                            <div class="mb-2">
+                                <label class="text-xs font-bold">標題</label>
+                                <input type="text" id="ai-preview-title" class="w-full border p-1 rounded font-bold">
+                            </div>
+                            <div class="mb-4">
+                                <label class="text-xs font-bold">內容</label>
+                                <textarea id="ai-preview-content" rows="6" class="w-full border p-1 rounded text-sm"></textarea>
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold">解析生成的題目資料 (唯讀)</label>
+                                <pre id="ai-preview-questions" class="text-xs bg-gray-200 p-2 rounded max-h-32 overflow-y-auto"></pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-    /* =========================================
-       登入邏輯
-    ========================================= */
-    function switchLoginTab(role) {
-      STATE.loginTab = role;
-      document.getElementById('tab-student').className = role === 'student' ? 'text-lg font-bold text-blue-600 border-b-2 border-blue-600 px-2 pb-1' : 'text-lg font-bold text-gray-400 px-2 pb-1';
-      document.getElementById('tab-teacher').className = role === 'teacher' ? 'text-lg font-bold text-blue-600 border-b-2 border-blue-600 px-2 pb-1' : 'text-lg font-bold text-gray-400 px-2 pb-1';
-      document.getElementById('lbl-account').innerText = role === 'student' ? '學生帳號' : '教師帳號';
-      document.getElementById('teacher-hint').style.display = role === 'teacher' ? 'block' : 'none';
-    }
+                <div class="p-4 border-t bg-gray-50 text-right">
+                    <button onclick="closeModal('modal-add-article')" class="px-4 py-2 text-gray-600 hover:text-gray-800 mr-2">取消</button>
+                    <button id="btn-save-article" onclick="submitArticle()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">儲存並建立</button>
+                </div>
+            </div>
+       </div>
 
-    function handleLogin(e) {
-      e.preventDefault();
-      const acc = document.getElementById('login-account').value.trim();
-      const pwd = document.getElementById('login-password').value.trim();
-      
-      let foundUser = null;
-      if (STATE.loginTab === 'teacher') {
-        foundUser = db.teachers.find(t => t.account === acc && t.password === pwd);
-      } else {
-        foundUser = db.students.find(s => s.account === acc && s.password === pwd);
-      }
+       <!-- Manage Questions Modal -->
+       <div id="modal-manage-questions" class="hidden fixed inset-0 modal-overlay z-40 flex items-center justify-center p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col relative">
+                <button onclick="closeModal('modal-manage-questions')" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 z-10">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+                <div class="p-4 border-b bg-gray-50 rounded-t-lg">
+                    <h3 class="text-lg font-bold">管理題目 - <span id="manage-q-article-title" class="text-blue-600"></span></h3>
+                </div>
+                <div class="p-4 overflow-y-auto flex-grow flex flex-col md:flex-row gap-6">
+                    <!-- Left: Add form -->
+                    <div class="w-full md:w-1/3 border-r pr-4">
+                        <h4 class="font-bold mb-3 border-b pb-1">新增單一題目</h4>
+                        <select id="q-type-select" class="w-full border rounded p-2 mb-3" onchange="toggleQForm()">
+                            <option value="tf">是非題</option>
+                            <option value="choice">選擇題</option>
+                            <option value="qa">問答題</option>
+                            <option value="draw">塗鴉題</option>
+                        </select>
+                        
+                        <div id="q-form-content" class="space-y-3">
+                            <div>
+                                <label class="block text-sm font-medium">題目內容</label>
+                                <textarea id="q-text" rows="2" class="w-full border rounded p-1"></textarea>
+                            </div>
+                            
+                            <!-- Options for Choice -->
+                            <div id="q-choice-options" class="hidden space-y-1">
+                                <label class="block text-sm font-medium">選項</label>
+                                <input type="text" id="q-opt-A" placeholder="A選項" class="w-full border rounded p-1 text-sm">
+                                <input type="text" id="q-opt-B" placeholder="B選項" class="w-full border rounded p-1 text-sm">
+                                <input type="text" id="q-opt-C" placeholder="C選項" class="w-full border rounded p-1 text-sm">
+                                <input type="text" id="q-opt-D" placeholder="D選項" class="w-full border rounded p-1 text-sm">
+                            </div>
 
-      if (foundUser) {
-        STATE.user = foundUser;
-        STATE.role = STATE.loginTab;
-        document.getElementById('login-form').reset();
-        checkLoginState();
-      } else {
-        showMsg('登入失敗', '帳號或密碼錯誤', 'error');
-      }
-    }
+                            <!-- Answers -->
+                            <div id="q-answer-tf">
+                                <label class="block text-sm font-medium">正確答案</label>
+                                <select id="q-ans-tf-val" class="w-full border rounded p-1">
+                                    <option value="O">O (是)</option>
+                                    <option value="X">X (非)</option>
+                                </select>
+                            </div>
+                            <div id="q-answer-choice" class="hidden">
+                                <label class="block text-sm font-medium">正確答案</label>
+                                <select id="q-ans-choice-val" class="w-full border rounded p-1">
+                                    <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option>
+                                </select>
+                            </div>
+                            <button onclick="submitSingleQuestion()" class="w-full bg-blue-600 text-white py-2 rounded text-sm hover:bg-blue-700">新增此題</button>
+                        </div>
+                    </div>
 
-    function logout() {
-      STATE.user = null;
-      checkLoginState();
-    }
+                    <!-- Right: Existing Questions List -->
+                    <div class="w-full md:w-2/3">
+                        <h4 class="font-bold mb-3 border-b pb-1">已建立題目</h4>
+                        <div id="existing-questions-list" class="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
+                            <!-- Dynamic Content -->
+                            <p class="text-sm text-gray-500">載入中...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+       </div>
 
-    function checkLoginState() {
-      if (STATE.user) {
-        document.getElementById('logout-btn').classList.remove('hidden');
-        if (STATE.role === 'teacher') {
-          switchView('view-teacher');
-          renderClassList();
-        } else {
-          switchView('view-student');
-          document.getElementById('student-welcome').innerText = `${STATE.user.name} 同學，歡迎！`;
-        }
-      } else {
-        document.getElementById('logout-btn').classList.add('hidden');
-        switchView('view-login');
-      }
-    }
+       <!-- View Record Modal -->
+       <div id="modal-view-record" class="hidden fixed inset-0 modal-overlay z-40 flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col relative">
+            <button onclick="closeModal('modal-view-record')" class="absolute top-4 right-4 text-gray-600 hover:text-gray-800 z-10 bg-white rounded-full p-1">
+                <i class="fas fa-times text-2xl"></i>
+            </button>
+            <div class="p-4 border-b bg-gray-50 rounded-t-lg">
+                <h3 class="text-lg font-bold">測驗紀錄詳情</h3>
+            </div>
+            <div class="p-6 overflow-y-auto flex-grow space-y-4 text-sm" id="record-detail-content">
+                <!-- 動態填入 -->
+            </div>
+        </div>
+   </div>
 
-    /* =========================================
-       教師後台 - 班級與學生管理
-    ========================================= */
-    // 產生隨機 6 碼英數密碼
-    function generateRandomPassword() {
-      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
-      let pwd = '';
-      for (let i = 0; i < 6; i++) {
-        pwd += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-      return pwd;
-    }
+        <script>
+            // --- Global Variables ---
+            let currentUser = null;
+            let currentTeacherClasses = [];
+            let currentClassCode = null;
+            let currentQuestionsData = { tf: [], choice: [], qa: [], draw: [] };
+            let aiGeneratedData = null; // Store parsed AI data temporarily
+            let canvasCtx = null;
+            let isDrawing = false;
+            let lastX = 0; let lastY = 0;
 
-    // --- 班級操作 ---
-    function renderClassList() {
-      const list = document.getElementById('class-list');
-      list.innerHTML = '';
-      if (db.classes.length === 0) {
-        list.innerHTML = '<li class="text-gray-400 text-sm text-center py-4">尚無班級</li>';
-        return;
-      }
+            // Initialize app
+            document.addEventListener('DOMContentLoaded', () => {
+                checkSettings();
+                const savedUser = localStorage.getItem('rc_user');
+                if (savedUser) {
+                    currentUser = JSON.parse(savedUser);
+                    updateUIByRole();
+                } else {
+                    document.getElementById('view-portal').classList.remove('hidden');
+                }
+            });
 
-      db.classes.forEach(c => {
-        const li = document.createElement('li');
-        const isActive = STATE.currentClassId === c.id;
-        li.className = `p-3 rounded cursor-pointer transition flex justify-between items-center ${isActive ? 'bg-blue-100 border-l-4 border-blue-500 font-bold' : 'bg-gray-50 hover:bg-gray-100'}`;
-        li.innerHTML = `<span>${c.name}</span> <span class="text-xs text-gray-400">${db.students.filter(s=>s.classId===c.id).length}人</span>`;
-        li.onclick = () => selectClass(c.id);
-        list.appendChild(li);
-      });
-    }
+            // --- Utility Functions ---
+            const showLoading = (text = '處理中...') => {
+                document.getElementById('loading-text').innerText = text;
+                document.getElementById('loading-overlay').classList.remove('hidden');
+            };
+            const hideLoading = () => document.getElementById('loading-overlay').classList.add('hidden');
+            const showModal = (id) => document.getElementById(id).classList.remove('hidden');
+            const closeModal = (id) => {
+                document.getElementById(id).classList.add('hidden');
+                if(id === 'modal-add-article') {
+                    // Reset form
+                    document.getElementById('ai-preview-area').classList.add('hidden');
+                    aiGeneratedData = null;
+                }
+            };
+            
+            const messageBox = (msg, isError = false) => {
+                alert(msg); // Simplified for this environment. Ideally use a custom toast notification.
+            };
 
-    function addClass() {
-      const name = prompt('請輸入新班級名稱 (例如: 一年甲班)');
-      if (name && name.trim()) {
-        const newClass = { id: 'C' + Date.now(), name: name.trim() };
-        db.classes.push(newClass);
-        saveDB();
-        renderClassList();
-        selectClass(newClass.id);
-      }
-    }
+            // --- API Communication ---
+            async function callAPI(action, payload = {}) {
+                const gasUrl = localStorage.getItem('rc_gas_url');
+                if (!gasUrl) {
+                    messageBox('請先設定 Google Apps Script 網址 (右上角齒輪)', true);
+                    return { success: false };
+                }
 
-    function selectClass(classId) {
-      STATE.currentClassId = classId;
-      renderClassList(); // 更新左側 Highlight
-      
-      const c = db.classes.find(x => x.id === classId);
-      if (c) {
-        document.getElementById('student-manager-empty').classList.add('hidden');
-        document.getElementById('student-manager-content').classList.remove('hidden');
-        document.getElementById('current-class-name-display').innerText = `目前班級：${c.name}`;
-        renderStudentList();
-      }
-    }
+                payload.action = action;
+                
+                // Exponential backoff retry logic (max 5 retries: 1s, 2s, 4s, 8s, 16s)
+                let retries = 5;
+                let delay = 1000;
+                
+                while (retries > 0) {
+                    try {
+                        const response = await fetch(gasUrl, {
+                            method: 'POST',
+                            body: JSON.stringify(payload),
+                            // mode: 'cors' is default but can cause issues with older GAS setups, omit or use 'no-cors' if just sending, but we need response.
+                        });
+                        
+                        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                        const result = await response.json();
+                        return result;
+                    } catch (error) {
+                        retries--;
+                        if (retries === 0) {
+                            console.error('API Error after retries:', error);
+                            messageBox('與伺服器連線失敗，請檢查網址或網路。', true);
+                            return { success: false, message: error.message };
+                        }
+                        await new Promise(res => setTimeout(res, delay));
+                        delay *= 2;
+                    }
+                }
+            }
 
-    function editCurrentClass() {
-      const c = db.classes.find(x => x.id === STATE.currentClassId);
-      if(!c) return;
-      const newName = prompt('修改班級名稱：', c.name);
-      if (newName && newName.trim()) {
-        c.name = newName.trim();
-        saveDB();
-        renderClassList();
-        document.getElementById('current-class-name-display').innerText = `目前班級：${c.name}`;
-      }
-    }
+            // --- Gemini API (Canvas Environment Fallback) ---
+            async function callGemini(promptText) {
+                let apiKey = localStorage.getItem('rc_gemini_key');
+                if (!apiKey) apiKey = ""; // Use empty string to trigger default environment behavior
 
-    // --- 學生操作 ---
-    function renderStudentList() {
-      const tbody = document.getElementById('student-list-tbody');
-      tbody.innerHTML = '';
-      const studentsInClass = db.students.filter(s => s.classId === STATE.currentClassId);
+                const systemInstruction = `
+                    你是一位專業的閱讀測驗命題老師。
+                    請根據使用者的需求生成文章與題目。
+                    務必嚴格遵守以下 JSON 格式輸出，不要有任何 Markdown 或額外文字包裝：
+                    {
+                        "title": "文章標題",
+                        "content": "文章完整內容",
+                        "questions": {
+                            "tf": [{"question": "是非題題目1", "answer": "O"}, {"question": "是非題題目2", "answer": "X"}],
+                            "choice": [{"question": "選擇題題目1", "options": ["選項A", "選項B", "選項C", "選項D"], "answer": "A"}],
+                            "qa": [{"question": "問答題題目1"}],
+                            "draw": [{"question": "塗鴉題題目1(請畫出...)"}]
+                        }
+                    }
+                    * answer 欄位，是非題只能填 "O" 或 "X"；選擇題只能填 "A", "B", "C", "D"。
+                    * 如果某題型數量要求為0，則該陣列保留空陣列 []。
+                `;
 
-      if (studentsInClass.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-gray-400">尚無學生資料</td></tr>';
-        return;
-      }
+                try {
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: promptText }] }],
+                            systemInstruction: { parts: [{ text: systemInstruction }] },
+                            generationConfig: { 
+                                responseMimeType: "application/json"
+                            }
+                        })
+                    });
 
-      // 排序一下，依據帳號
-      studentsInClass.sort((a,b) => a.account.localeCompare(b.account));
+                    if (!response.ok) throw new Error('AI API Error');
+                    const data = await response.json();
+                    let textResult = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if(!textResult) throw new Error("無回應內容");
+                    return JSON.parse(textResult);
+                } catch (error) {
+                    console.error("Gemini Error:", error);
+                    messageBox("AI 生成失敗，請檢查 API Key 或稍後再試。", true);
+                    return null;
+                }
+            }
 
-      studentsInClass.forEach(s => {
-        const tr = document.createElement('tr');
-        tr.className = 'border-b hover:bg-gray-50';
-        tr.innerHTML = `
-          <td class="p-2">${s.account}</td>
-          <td class="p-2 font-medium">${s.name || '(未設定)'}</td>
-          <td class="p-2">
-             <span class="bg-gray-200 text-transparent hover:text-gray-800 cursor-pointer px-2 py-1 rounded select-all font-mono text-xs transition-colors" title="點擊顯示密碼">
-               ${s.password}
-             </span>
-          </td>
-          <td class="p-2">
-            <button onclick="editStudent('${s.account}')" class="text-blue-500 hover:underline text-xs mr-2">編輯</button>
-            <button onclick="deleteStudent('${s.account}')" class="text-red-500 hover:underline text-xs">刪除</button>
-          </td>
-        `;
-        tbody.appendChild(tr);
-      });
-    }
+            // --- Settings & UI Logic ---
+            function showSettingsModal() {
+                document.getElementById('setting-gas-url').value = localStorage.getItem('rc_gas_url') || '';
+                document.getElementById('setting-api-key').value = localStorage.getItem('rc_gemini_key') || '';
+                showModal('modal-settings');
+            }
 
-    function batchCreateStudents() {
-      if (!STATE.currentClassId) return;
-      
-      const count = parseInt(document.getElementById('batch-student-count').value) || 0;
-      const prefix = document.getElementById('batch-student-prefix').value.trim();
-      
-      if (count <= 0 || !prefix) {
-        alert('請輸入有效的數量與前綴。'); return;
-      }
+            function saveSettings() {
+                const url = document.getElementById('setting-gas-url').value.trim();
+                const key = document.getElementById('setting-api-key').value.trim();
+                if (!url) { messageBox('GAS URL 不能為空', true); return; }
+                localStorage.setItem('rc_gas_url', url);
+                localStorage.setItem('rc_gemini_key', key);
+                closeModal('modal-settings');
+                messageBox('設定已儲存');
+                checkSettings();
+            }
 
-      // 尋找目前的流水號最大值，避免重複
-      let currentMax = 0;
-      db.students.forEach(s => {
-        if(s.account.startsWith(prefix)) {
-          const numPart = parseInt(s.account.replace(prefix, ''));
-          if(!isNaN(numPart) && numPart > currentMax) currentMax = numPart;
-        }
-      });
+            function resetSettings() {
+                if(confirm('確定要清除所有設定與登入狀態嗎？')) {
+                    localStorage.clear();
+                    location.reload();
+                }
+            }
 
-      let addedCount = 0;
-      for (let i = 1; i <= count; i++) {
-        const numStr = String(currentMax + i).padStart(2, '0'); // 例如: 01, 02
-        const newAccount = prefix + numStr;
-        
-        // 防呆: 確定帳號沒重複
-        if(!db.students.find(s => s.account === newAccount)) {
-           db.students.push({
-             account: newAccount,
-             name: `學生_${newAccount}`, // 預設名稱
-             password: generateRandomPassword(),
-             classId: STATE.currentClassId
-           });
-           addedCount++;
-        }
-      }
+            function checkSettings() {
+                if(!localStorage.getItem('rc_gas_url')) {
+                    // Auto open settings if no URL
+                    setTimeout(showSettingsModal, 500);
+                }
+            }
 
-      saveDB();
-      renderStudentList();
-      renderClassList(); // 更新人數顯示
-      showMsg('批次建立成功', `已成功建立 ${addedCount} 筆學生資料。`, 'success');
-    }
+            function showHelpModal() {
+                // Prepare code snippet
+                const codeBlock = document.getElementById('code-block');
+                const rawCode = `/**\n* (請至開發環境複製 Code.gs 內容)\n*/\n// 此處為示意，實際請參考 prompt 中提供的 Code.gs`;
+                // In actual implementation within Canvas, user copies the code block above.
+                showModal('modal-help');
+            }
 
-    function editStudent(account) {
-      const s = db.students.find(x => x.account === account);
-      if(!s) return;
-      
-      const newName = prompt(`修改 [${s.account}] 的姓名：`, s.name);
-      if (newName !== null) { // 允許空白但不允許 null(取消)
-        s.name = newName.trim();
-        
-        // 詢問是否重設密碼
-        if(confirm(`是否要為 ${s.account} 重新產生一組隨機密碼？`)) {
-          s.password = generateRandomPassword();
-        }
-        
-        saveDB();
-        renderStudentList();
-      }
-    }
+            function copyCode() {
+                const text = "請手動複製上方 Code.gs 區塊的內容"; // Fallback message
+                document.execCommand('copy');
+                messageBox('請手動選取 Code.gs 內容進行複製');
+            }
 
-    function deleteStudent(account) {
-      if(confirm(`確定要刪除學生 [${account}] 嗎？`)) {
-        db.students = db.students.filter(x => x.account !== account);
-        saveDB();
-        renderStudentList();
-        renderClassList();
-      }
-    }
-  </script>
-</body>
-</html>
+            function updateUIByRole() {
+                document.getElementById('view-portal').classList.add('hidden');
+                document.getElementById('view-teacher').classList.add('hidden');
+                document.getElementById('view-student').classList.add('hidden');
+                
+                if (!currentUser) {
+                    document.getElementById('view-portal').classList.remove('hidden');
+                    document.getElementById('user-info').classList.add('hidden');
+                    document.getElementById('logout-btn').classList.add('hidden');
+                    return;
+                }
+
+                document.getElementById('user-info').innerText = `${currentUser.name} (${currentUser.role === 'teacher' ? '老師' : '學生'})`;
+                document.getElementById('user-info').classList.remove('hidden');
+                document.getElementById('logout-btn').classList.remove('hidden');
+
+                if (currentUser.role === 'teacher') {
+                    document.getElementById('view-teacher').classList.remove('hidden');
+                    switchTeacherMenu('classes'); // Default menu
+                } else {
+                    document.getElementById('view-student').classList.remove('hidden');
+                    initStudentDashboard();
+                }
+            }
+
+            function logout() {
+                currentUser = null;
+                localStorage.removeItem('rc_user');
+                updateUIByRole();
+                // Hide test area if open
+                document.getElementById('student-test-area').classList.add('hidden');
+            }
+
+            // --- Portal Logic ---
+            function switchPortalTab(role) {
+                if (role === 'student') {
+                    document.getElementById('tab-student').classList.replace('text-gray-500', 'text-blue-600');
+                    document.getElementById('tab-student').classList.replace('border-transparent', 'border-blue-500');
+                    document.getElementById('tab-teacher').classList.replace('text-blue-600', 'text-gray-500');
+                    document.getElementById('tab-teacher').classList.replace('border-blue-500', 'border-transparent');
+                    document.getElementById('form-student').classList.remove('hidden');
+                    document.getElementById('form-teacher').classList.add('hidden');
+                } else {
+                    document.getElementById('tab-teacher').classList.replace('text-gray-500', 'text-blue-600');
+                    document.getElementById('tab-teacher').classList.replace('border-transparent', 'border-blue-500');
+                    document.getElementById('tab-student').classList.replace('text-blue-600', 'text-gray-500');
+                    document.getElementById('tab-student').classList.replace('border-blue-500', 'border-transparent');
+                    document.getElementById('form-teacher').classList.remove('hidden');
+                    document.getElementById('form-student').classList.add('hidden');
+                }
+            }
+
+            function toggleTeacherRegMode(showReg) {
+                if (showReg) {
+                    document.getElementById('teacher-login-mode').classList.add('hidden');
+                    document.getElementById('teacher-reg-mode').classList.remove('hidden');
+                } else {
+                    document.getElementById('teacher-login-mode').classList.remove('hidden');
+                    document.getElementById('teacher-reg-mode').classList.add('hidden');
+                }
+            }
+
+            async function handleTeacherRegister() {
+                const acc = document.getElementById('reg-teacher-account').value.trim();
+                const pwd = document.getElementById('reg-teacher-password').value;
+                const name = document.getElementById('reg-teacher-name').value.trim();
+                
+                if(!acc || !pwd || !name) { messageBox('請填寫完整資訊', true); return; }
+
+                showLoading('註冊中...');
+                const res = await callAPI('registerTeacher', { account: acc, password: pwd, name: name });
+                hideLoading();
+
+                if (res && res.success) {
+                    messageBox('註冊成功！請登入。');
+                    toggleTeacherRegMode(false);
+                    document.getElementById('login-teacher-account').value = acc;
+                } else {
+                    messageBox(res ? res.message : '註冊失敗', true);
+                }
+            }
+
+            async function handleLogin(role) {
+                const accId = `login-${role}-account`;
+                const pwdId = `login-${role}-password`;
+                const acc = document.getElementById(accId).value.trim();
+                const pwd = document.getElementById(pwdId).value;
+
+                if(!acc || !pwd) { messageBox('請填寫帳號密碼', true); return; }
+
+                showLoading('登入中...');
+                const res = await callAPI('login', { role: role, account: acc, password: pwd });
+                hideLoading();
+
+                if (res && res.success) {
+                    currentUser = res.user;
+                    localStorage.setItem('rc_user', JSON.stringify(currentUser));
+                    updateUIByRole();
+                } else {
+                    messageBox(res ? res.message : '登入失敗', true);
+                }
+            }
+
+            // --- Teacher Dashboard Logic ---
+            function switchTeacherMenu(menu) {
+                // Update UI buttons
+                document.querySelectorAll('.t-menu-btn').forEach(btn => {
+                    btn.classList.remove('bg-gray-700');
+                });
+                document.getElementById(`t-menu-${menu}`).classList.add('bg-gray-700');
+
+                // Hide all contents
+                document.querySelectorAll('.t-content-section').forEach(sec => {
+                    sec.classList.add('hidden');
+                });
+                document.getElementById(`t-content-${menu}`).classList.remove('hidden');
+
+                // Load Data
+                if (menu === 'classes') loadTeacherClasses();
+                if (menu === 'articles') loadTeacherArticles();
+                if (menu === 'records') {
+                     populateClassFilter();
+                     loadTestRecords();
+                }
+            }
+
+            // Classes & Students
+            async function loadTeacherClasses() {
+                showLoading('讀取班級資料...');
+                const res = await callAPI('getTeacherClasses', { teacherAccount: currentUser.account });
+                hideLoading();
+                
+                const listEl = document.getElementById('class-list');
+                listEl.innerHTML = '';
+                
+                if (res && res.success) {
+                    currentTeacherClasses = res.classes;
+                    if(res.classes.length === 0) {
+                        listEl.innerHTML = '<li class="text-gray-500 text-sm">尚無班級，請點擊右上角新增。</li>';
+                        return;
+                    }
+                    res.classes.forEach(c => {
+                        const li = document.createElement('li');
+                        li.className = 'p-3 bg-gray-50 border rounded cursor-pointer hover:bg-blue-50 transition flex justify-between items-center';
+                        li.onclick = () => loadClassStudents(c['班級代碼'], c['班級名稱']);
+                        li.innerHTML = `
+                            <div>
+                                <div class="font-bold text-blue-700">${c['班級名稱']}</div>
+                                <div class="text-xs text-gray-500">代碼: ${c['班級代碼']}</div>
+                            </div>
+                            <i class="fas fa-chevron-right text-gray-400"></i>
+                        `;
+                        listEl.appendChild(li);
+                    });
+                }
+            }
+
+            async function submitNewClass() {
+                const code = document.getElementById('new-class-code').value.trim().toUpperCase();
+                const name = document.getElementById('new-class-name').value.trim();
+                if(!code || !name) return messageBox('請填寫完整');
+
+                showLoading('新增中...');
+                const res = await callAPI('addClass', { teacherAccount: currentUser.account, classCode: code, className: name });
+                hideLoading();
+
+                if(res && res.success) {
+                    closeModal('modal-add-class');
+                    loadTeacherClasses();
+                } else {
+                    messageBox(res.message, true);
+                }
+            }
+
+            async function loadClassStudents(classCode, className) {
+                currentClassCode = classCode;
+                document.getElementById('current-class-title').innerText = `${className} 學生名單`;
+                document.getElementById('btn-add-student').classList.remove('hidden');
+                document.getElementById('add-student-class-label').innerText = className;
+
+                showLoading('讀取學生名單...');
+                const res = await callAPI('getStudentsInClass', { classCode: classCode });
+                hideLoading();
+
+                const tbody = document.getElementById('student-list');
+                tbody.innerHTML = '';
+
+                if(res && res.success) {
+                     if(res.students.length === 0) {
+                         tbody.innerHTML = '<tr><td colspan="3" class="px-6 py-4 text-center text-sm text-gray-500">尚無學生</td></tr>';
+                         return;
+                     }
+                     res.students.forEach(s => {
+                         tbody.innerHTML += `
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${s['學生帳號']}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${s['學生姓名']}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">${s['密碼']}</td>
+                            </tr>
+                         `;
+                     });
+                }
+            }
+
+            function showAddStudentModal() {
+                if(!currentClassCode) return messageBox('請先選擇班級');
+                showModal('modal-add-student');
+            }
+
+            async function submitNewStudent() {
+                const id = document.getElementById('new-student-id').value.trim();
+                const name = document.getElementById('new-student-name').value.trim();
+                if(!id || !name) return messageBox('請填寫完整');
+                
+                // Auto generate 6 chars password
+                const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // omit confusing chars like O,0,I,1
+                let pwd = '';
+                for(let i=0; i<6; i++) pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+
+                showLoading('新增中...');
+                const res = await callAPI('addStudent', { classCode: currentClassCode, studentId: id, studentName: name, password: pwd });
+                hideLoading();
+
+                if(res && res.success) {
+                    closeModal('modal-add-student');
+                    // refresh list
+                    loadClassStudents(currentClassCode, document.getElementById('add-student-class-label').innerText);
+                    document.getElementById('new-student-id').value = '';
+                    document.getElementById('new-student-name').value = '';
+                } else {
+                    messageBox(res.message, true);
+                }
+            }
+
+            // Articles & Questions
+            async function loadTeacherArticles() {
+                showLoading('讀取文章清單...');
+                const res = await callAPI('getTeacherArticles', { teacherAccount: currentUser.account });
+                hideLoading();
+                
+                const tbody = document.getElementById('teacher-article-list');
+                tbody.innerHTML = '';
+
+                if(res && res.success) {
+                    if(res.articles.length === 0) {
+                         tbody.innerHTML = '<tr><td colspan="3" class="px-6 py-4 text-center text-sm text-gray-500">尚無文章，請新增</td></tr>';
+                         return;
+                     }
+                    res.articles.forEach(a => {
+                        tbody.innerHTML += `
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${a['文章編號']}</td>
+                                <td class="px-6 py-4 text-sm text-gray-900 font-bold">${a['文章標題']}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <button onclick="openManageQuestions('${a['文章編號']}', '${a['文章標題']}')" class="text-indigo-600 hover:text-indigo-900 bg-indigo-50 px-3 py-1 rounded">管理題目</button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+            }
+
+            function switchArticleMode(mode) {
+                if(mode === 'manual') {
+                    document.getElementById('article-mode-manual').classList.remove('hidden');
+                    document.getElementById('article-mode-ai').classList.add('hidden');
+                    document.getElementById('btn-mode-manual').classList.replace('bg-gray-200', 'bg-blue-600');
+                    document.getElementById('btn-mode-manual').classList.replace('text-gray-700', 'text-white');
+                    document.getElementById('btn-mode-ai').classList.replace('bg-purple-600', 'bg-gray-200');
+                    document.getElementById('btn-mode-ai').classList.replace('text-white', 'text-gray-700');
+                    aiGeneratedData = null;
+                } else {
+                    document.getElementById('article-mode-ai').classList.remove('hidden');
+                    document.getElementById('article-mode-manual').classList.add('hidden');
+                    document.getElementById('btn-mode-ai').classList.replace('bg-gray-200', 'bg-purple-600');
+                    document.getElementById('btn-mode-ai').classList.replace('text-gray-700', 'text-white');
+                    document.getElementById('btn-mode-manual').classList.replace('bg-blue-600', 'bg-gray-200');
+                    document.getElementById('btn-mode-manual').classList.replace('text-white', 'text-gray-700');
+                }
+            }
+
+            async function generateArticleByAI() {
+                const topic = document.getElementById('ai-topic').value;
+                const style = document.getElementById('ai-style').value;
+                const words = document.getElementById('ai-words').value;
+                const qTf = document.getElementById('ai-q-tf').value;
+                const qChoice = document.getElementById('ai-q-choice').value;
+                const qQa = document.getElementById('ai-q-qa').value;
+                const qDraw = document.getElementById('ai-q-draw').value;
+
+                if(!topic) return messageBox('請輸入文章主題');
+
+                const prompt = `請幫我寫一篇關於「${topic}」的文章，風格是「${style}」，字數大約 ${words} 字。
+                並且根據文章內容出題：${qTf}題是非題，${qChoice}題選擇題，${qQa}題問答題，${qDraw}題塗鴉題(請學生畫圖表達)。`;
+
+                showLoading('AI 生成中，請稍候...');
+                const data = await callGemini(prompt);
+                hideLoading();
+
+                if(data) {
+                    aiGeneratedData = data;
+                    document.getElementById('ai-preview-title').value = data.title || '';
+                    document.getElementById('ai-preview-content').value = data.content || '';
+                    document.getElementById('ai-preview-questions').innerText = JSON.stringify(data.questions, null, 2);
+                    document.getElementById('ai-preview-area').classList.remove('hidden');
+                    messageBox('生成完成，請檢閱預覽內容。');
+                }
+            }
+
+            async function submitArticle() {
+                const isAiMode = !document.getElementById('article-mode-ai').classList.contains('hidden');
+                let title, content, questionsData;
+
+                if(isAiMode) {
+                    if(!aiGeneratedData) return messageBox('請先使用 AI 生成內容');
+                    title = document.getElementById('ai-preview-title').value;
+                    content = document.getElementById('ai-preview-content').value;
+                    questionsData = aiGeneratedData.questions;
+                } else {
+                    title = document.getElementById('manual-article-title').value;
+                    content = document.getElementById('manual-article-content').value;
+                }
+
+                if(!title || !content) return messageBox('標題與內容不能為空');
+
+                showLoading('儲存文章...');
+                // 1. Add Article
+                const resA = await callAPI('addArticle', { teacherAccount: currentUser.account, title: title, content: content });
+                
+                if(resA && resA.success) {
+                    const newArticleId = resA.articleId;
+                    // 2. Add Questions if AI mode
+                    if(isAiMode && questionsData) {
+                        showLoading('寫入題目資料...');
+                        await callAPI('addQuestionsBatch', { articleId: newArticleId, questions: questionsData });
+                    }
+                    hideLoading();
+                    closeModal('modal-add-article');
+                    messageBox('文章建立成功！');
+                    loadTeacherArticles();
+                } else {
+                    hideLoading();
+                    messageBox('文章建立失敗', true);
+                }
+            }
+
+            // Manage Questions
+            let currentManageArticleId = null;
+            async function openManageQuestions(aId, aTitle) {
+                currentManageArticleId = aId;
+                document.getElementById('manage-q-article-title').innerText = aTitle;
+                showModal('modal-manage-questions');
+                toggleQForm(); // Reset form
+                await fetchAndRenderExistingQuestions(aId);
+            }
+
+            async function fetchAndRenderExistingQuestions(aId) {
+                const listEl = document.getElementById('existing-questions-list');
+                listEl.innerHTML = '<p class="text-sm text-gray-500">讀取中...</p>';
+                
+                const res = await callAPI('getQuestionsForArticle', { articleId: aId });
+                if(res && res.success) {
+                    let html = '';
+                    const qData = res.questions;
+                    
+                    const renderList = (arr, typeName) => {
+                        if(!arr || arr.length===0) return '';
+                        let h = `<div class="mb-4"><h5 class="font-bold text-sm bg-gray-100 p-1 rounded">${typeName}</h5>`;
+                        arr.forEach(q => {
+                            let ansStr = q['正確解答'] ? `<span class="text-red-500 ml-2">(答: ${q['正確解答']})</span>` : '';
+                            h += `<div class="border-b py-2 text-sm pl-2">
+                                    <span class="font-mono text-gray-400 text-xs">${q['題目編號']}</span> 
+                                    ${q['題目內容']} ${ansStr}
+                                  </div>`;
+                        });
+                        h += `</div>`;
+                        return h;
+                    };
+
+                    html += renderList(qData.tf, '是非題');
+                    html += renderList(qData.choice, '選擇題');
+                    html += renderList(qData.qa, '問答題');
+                    html += renderList(qData.draw, '塗鴉題');
+
+                    listEl.innerHTML = html || '<p class="text-sm text-gray-500">目前沒有題目。</p>';
+                }
+            }
+
+            function toggleQForm() {
+                const type = document.getElementById('q-type-select').value;
+                document.getElementById('q-choice-options').classList.add('hidden');
+                document.getElementById('q-answer-tf').classList.add('hidden');
+                document.getElementById('q-answer-choice').classList.add('hidden');
+
+                if(type === 'tf') document.getElementById('q-answer-tf').classList.remove('hidden');
+                if(type === 'choice') {
+                    document.getElementById('q-choice-options').classList.remove('hidden');
+                    document.getElementById('q-answer-choice').classList.remove('hidden');
+                }
+            }
+
+            async function submitSingleQuestion() {
+                const type = document.getElementById('q-type-select').value;
+                const qText = document.getElementById('q-text').value.trim();
+                if(!qText) return messageBox('請輸入題目內容');
+
+                let payload = { tf: [], choice: [], qa: [], draw: [] };
+
+                if(type === 'tf') {
+                    payload.tf.push({ question: qText, answer: document.getElementById('q-ans-tf-val').value });
+                } else if(type === 'choice') {
+                    const opts = [
+                        document.getElementById('q-opt-A').value.trim(),
+                        document.getElementById('q-opt-B').value.trim(),
+                        document.getElementById('q-opt-C').value.trim(),
+                        document.getElementById('q-opt-D').value.trim()
+                    ];
+                    if(opts.some(o => !o)) return messageBox('選擇題四個選項都需填寫');
+                    payload.choice.push({ question: qText, options: opts, answer: document.getElementById('q-ans-choice-val').value });
+                } else if(type === 'qa') {
+                    payload.qa.push({ question: qText });
+                } else if(type === 'draw') {
+                    payload.draw.push({ question: qText });
+                }
+
+                showLoading('新增題目...');
+                const res = await callAPI('addQuestionsBatch', { articleId: currentManageArticleId, questions: payload });
+                hideLoading();
+
+                if(res && res.success) {
+                    document.getElementById('q-text').value = '';
+                    fetchAndRenderExistingQuestions(currentManageArticleId);
+                }
+            }
+
+            // Test Records
+            async function populateClassFilter() {
+                 const select = document.getElementById('filter-class');
+                 select.innerHTML = '<option value="all">全部班級</option>';
+                 if(currentTeacherClasses.length === 0) {
+                     // try fetch if empty
+                     const res = await callAPI('getTeacherClasses', { teacherAccount: currentUser.account });
+                     if(res && res.success) currentTeacherClasses = res.classes;
+                 }
+                 currentTeacherClasses.forEach(c => {
+                     select.innerHTML += `<option value="${c['班級代碼']}">${c['班級名稱']}</option>`;
+                 });
+
+                 // Also populate article filter
+                 const artSelect = document.getElementById('filter-article');
+                 artSelect.innerHTML = '<option value="all">全部文章</option>';
+                 const aRes = await callAPI('getTeacherArticles', { teacherAccount: currentUser.account });
+                 if(aRes && aRes.success) {
+                     aRes.articles.forEach(a => {
+                         artSelect.innerHTML += `<option value="${a['文章編號']}">${a['文章標題']}</option>`;
+                     });
+                 }
+            }
+
+            async function loadTestRecords() {
+                showLoading('讀取測驗紀錄...');
+                const res = await callAPI('getTestRecords', { teacherAccount: currentUser.account });
+                hideLoading();
+
+                const tbody = document.getElementById('test-records-list');
+                tbody.innerHTML = '';
+
+                if(res && res.success) {
+                    let records = res.records;
+                    
+                    // Filter logic
+                    const fClass = document.getElementById('filter-class').value;
+                    const fArticle = document.getElementById('filter-article').value;
+
+                    // Need student info to map class
+                    const sRes = await callAPI('getStudentsInClass', { classCode: '' }); // Fetch all might be heavy, shortcut: rely on loaded data or fetch specific. For simplicity, we filter locally if we have student class mapping.
+                    // A better approach is backend filtering, but we do it frontend here for UI speed.
+                    
+                    if(fArticle !== 'all') {
+                        records = records.filter(r => r['文章編號'] === fArticle);
+                    }
+
+                    if(records.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-3 text-center text-gray-500">查無紀錄</td></tr>';
+                        return;
+                    }
+
+                    records.forEach(r => {
+                        // Pass data as escaped JSON string to onclick
+                        const rStr = encodeURIComponent(JSON.stringify(r));
+                        tbody.innerHTML += `
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-4 py-3 whitespace-nowrap">${r['時間戳記']}</td>
+                                <td class="px-4 py-3 whitespace-nowrap">${r['學生帳號']}</td>
+                                <td class="px-4 py-3 whitespace-nowrap">${r['文章編號']}</td>
+                                <td class="px-4 py-3 font-bold text-blue-600">${r['系統分數']}</td>
+                                <td class="px-4 py-3">
+                                    <button onclick="viewRecordDetail('${rStr}')" class="text-white bg-blue-500 hover:bg-blue-600 px-2 py-1 rounded text-xs">詳細資料</button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+            }
+
+            function viewRecordDetail(encodedData) {
+                const data = JSON.parse(decodeURIComponent(encodedData));
+                const c = document.getElementById('record-detail-content');
+                
+                let qaHtml = '';
+                try {
+                    const qaObj = JSON.parse(data['問答題作答'] || '{}');
+                    for(let q in qaObj) qaHtml += `<div class="bg-gray-100 p-2 rounded mb-1"><strong>${q}:</strong> ${qaObj[q]}</div>`;
+                } catch(e){}
+
+                c.innerHTML = `
+                    <div class="grid grid-cols-2 gap-4 border-b pb-4">
+                        <div><span class="text-gray-500">時間：</span> ${data['時間戳記']}</div>
+                        <div><span class="text-gray-500">學生：</span> ${data['學生帳號']}</div>
+                        <div><span class="text-gray-500">文章：</span> ${data['文章編號']}</div>
+                        <div><span class="text-gray-500 text-lg font-bold text-blue-600">系統分數： ${data['系統分數']}</span></div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <h4 class="font-bold border-b pb-1 mb-2">作答詳情</h4>
+                        <div class="text-xs">
+                            <p><strong>是非題:</strong> ${data['是非題作答']}</p>
+                            <p><strong>選擇題:</strong> ${data['選擇題作答']}</p>
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <h4 class="font-bold border-b pb-1 mb-2">問答題作答</h4>
+                        ${qaHtml || '<span class="text-gray-400">無作答</span>'}
+                    </div>
+
+                    <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <h4 class="font-bold border-b pb-1 mb-2">塗鴉題圖片</h4>
+                            ${data['塗鴉題圖片'] ? `<img src="${data['塗鴉題圖片']}" class="max-w-full border rounded shadow-sm">` : '<span class="text-gray-400">無</span>'}
+                        </div>
+                        <div>
+                            <h4 class="font-bold border-b pb-1 mb-2">閱讀證明圖片</h4>
+                            ${data['閱讀證明圖片'] ? `<img src="${data['閱讀證明圖片']}" class="max-w-full border rounded shadow-sm">` : '<span class="text-gray-400">無</span>'}
+                        </div>
+                    </div>
+                `;
+                showModal('modal-view-record');
+            }
+
+
+            // --- Student Front-End Logic ---
+            async function initStudentDashboard() {
+                document.getElementById('student-welcome-msg').innerText = `歡迎，${currentUser.name} 同學！`;
+                
+                // Fetch all articles
+                const res = await callAPI('getAllArticles');
+                if(res && res.success) {
+                    const select = document.getElementById('student-article-select');
+                    select.innerHTML = '<option value="">-- 請選擇文章 --</option>';
+                    res.articles.forEach(a => {
+                        select.innerHTML += `<option value="${a['文章編號']}">${a['文章標題']}</option>`;
+                    });
+                }
+            }
+
+            let currentTestArticleId = null;
+
+            async function loadStudentArticleTest() {
+                const articleId = document.getElementById('student-article-select').value;
+                const testArea = document.getElementById('student-test-area');
+                
+                if(!articleId) {
+                    testArea.classList.add('hidden');
+                    return;
+                }
+
+                currentTestArticleId = articleId;
+                testArea.classList.remove('hidden');
+                
+                // Fetch Article Content (We need to get it from the full list fetched earlier, simple way here)
+                const aRes = await callAPI('getAllArticles');
+                const article = aRes.articles.find(a => a['文章編號'] === articleId);
+                if(article) {
+                    document.getElementById('test-article-title').innerText = article['文章標題'];
+                    // Use marked.js if available
+                    document.getElementById('test-article-content').innerHTML = typeof marked === 'function' ? marked.parse(article['文章內容']) : `<pre class="whitespace-pre-wrap">${article['文章內容']}</pre>`;
+                }
+
+                // Fetch Questions
+                showLoading('載入題目中...');
+                const qRes = await callAPI('getQuestionsForArticle', { articleId: articleId });
+                hideLoading();
+
+                if(qRes && qRes.success) {
+                    renderQuestions(qRes.questions);
+                }
+            }
+
+            function renderQuestions(qData) {
+                const container = document.getElementById('questions-container');
+                container.innerHTML = '';
+                
+                let qIndex = 1;
+
+                // TF
+                qData.tf.forEach(q => {
+                    container.innerHTML += `
+                        <div class="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-100" data-qtype="tf" data-qid="${q['題目編號']}">
+                            <p class="font-bold mb-3"><span class="bg-blue-600 text-white rounded-full w-6 h-6 inline-flex items-center justify-center mr-2 text-sm">${qIndex++}</span> [是非] ${q['題目內容']}</p>
+                            <div class="flex space-x-6 ml-8">
+                                <label class="flex items-center space-x-2 cursor-pointer">
+                                    <input type="radio" name="ans_${q['題目編號']}" value="O" class="w-5 h-5 text-blue-600">
+                                    <span class="text-lg">O (是)</span>
+                                </label>
+                                <label class="flex items-center space-x-2 cursor-pointer">
+                                    <input type="radio" name="ans_${q['題目編號']}" value="X" class="w-5 h-5 text-blue-600">
+                                    <span class="text-lg">X (非)</span>
+                                </label>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                // Choice
+                qData.choice.forEach(q => {
+                    let optsHTML = '';
+                    try {
+                        const opts = JSON.parse(q['選項']);
+                        const letters = ['A', 'B', 'C', 'D'];
+                        opts.forEach((opt, idx) => {
+                            optsHTML += `
+                                <label class="flex items-start space-x-3 p-2 hover:bg-blue-100 rounded cursor-pointer transition">
+                                    <input type="radio" name="ans_${q['題目編號']}" value="${letters[idx]}" class="mt-1 w-5 h-5 text-blue-600">
+                                    <span>${letters[idx]}. ${opt}</span>
+                                </label>
+                            `;
+                        });
+                    }catch(e){}
+
+                    container.innerHTML += `
+                        <div class="mb-6 p-4 bg-green-50 rounded-lg border border-green-100" data-qtype="choice" data-qid="${q['題目編號']}">
+                            <p class="font-bold mb-3"><span class="bg-green-600 text-white rounded-full w-6 h-6 inline-flex items-center justify-center mr-2 text-sm">${qIndex++}</span> [選擇] ${q['題目內容']}</p>
+                            <div class="space-y-2 ml-8">${optsHTML}</div>
+                        </div>
+                    `;
+                });
+
+                // QA
+                qData.qa.forEach(q => {
+                    container.innerHTML += `
+                        <div class="mb-6 p-4 bg-yellow-50 rounded-lg border border-yellow-100" data-qtype="qa" data-qid="${q['題目編號']}">
+                            <p class="font-bold mb-3"><span class="bg-yellow-600 text-white rounded-full w-6 h-6 inline-flex items-center justify-center mr-2 text-sm">${qIndex++}</span> [問答] ${q['題目內容']}</p>
+                            <textarea id="ans_${q['題目編號']}" rows="3" class="w-full border border-yellow-300 rounded p-2 focus:ring focus:ring-yellow-200" placeholder="請在此輸入答案..."></textarea>
+                        </div>
+                    `;
+                });
+
+                // Draw
+                if(qData.draw.length > 0) {
+                    const q = qData.draw[0]; // Assume 1 draw question max for UI simplicity here
+                    container.innerHTML += `
+                        <div class="mb-6 p-4 bg-purple-50 rounded-lg border border-purple-100" data-qtype="draw" data-qid="${q['題目編號']}">
+                            <p class="font-bold mb-3"><span class="bg-purple-600 text-white rounded-full w-6 h-6 inline-flex items-center justify-center mr-2 text-sm">${qIndex++}</span> [塗鴉] ${q['題目內容']}</p>
+                            <div class="flex flex-col items-center">
+                                <div class="mb-2 w-full flex justify-between px-2">
+                                    <span class="text-xs text-gray-500">在下方框內畫圖</span>
+                                    <button type="button" onclick="clearCanvas()" class="text-xs text-red-500 border border-red-500 px-2 rounded hover:bg-red-50">清除畫布</button>
+                                </div>
+                                <canvas id="drawing-canvas" width="400" height="300" class="max-w-full shadow-inner"></canvas>
+                                <input type="hidden" id="ans_${q['題目編號']}_canvas">
+                            </div>
+                        </div>
+                    `;
+                    setTimeout(initCanvas, 100);
+                }
+            }
+
+            // Canvas Logic
+            function initCanvas() {
+                const canvas = document.getElementById('drawing-canvas');
+                if(!canvas) return;
+                canvasCtx = canvas.getContext('2d');
+                canvasCtx.strokeStyle = '#000000';
+                canvasCtx.lineWidth = 3;
+                canvasCtx.lineCap = 'round';
+                
+                // Clear initial white background
+                canvasCtx.fillStyle = "white";
+                canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+                canvas.addEventListener('mousedown', startPosition);
+                canvas.addEventListener('mouseup', endPosition);
+                canvas.addEventListener('mousemove', draw);
+                canvas.addEventListener('touchstart', (e) => { e.preventDefault(); startPosition(e.touches[0]); }, {passive: false});
+                canvas.addEventListener('touchend', endPosition);
+                canvas.addEventListener('touchmove', (e) => { e.preventDefault(); draw(e.touches[0]); }, {passive: false});
+            }
+
+            function startPosition(e) {
+                isDrawing = true;
+                const rect = document.getElementById('drawing-canvas').getBoundingClientRect();
+                lastX = e.clientX - rect.left;
+                lastY = e.clientY - rect.top;
+            }
+
+            function endPosition() {
+                isDrawing = false;
+                canvasCtx.beginPath();
+            }
+
+            function draw(e) {
+                if (!isDrawing) return;
+                const canvas = document.getElementById('drawing-canvas');
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                canvasCtx.beginPath();
+                canvasCtx.moveTo(lastX, lastY);
+                canvasCtx.lineTo(x, y);
+                canvasCtx.stroke();
+                
+                lastX = x;
+                lastY = y;
+            }
+
+            function clearCanvas() {
+                if(canvasCtx) {
+                    const canvas = document.getElementById('drawing-canvas');
+                    canvasCtx.fillStyle = "white";
+                    canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+                }
+            }
+
+            // Image Compression
+            function handleProofImage(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 400;
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > MAX_WIDTH) {
+                            height *= MAX_WIDTH / width;
+                            width = MAX_WIDTH;
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                        document.getElementById('proof-base64').value = dataUrl;
+                        document.getElementById('proof-preview').src = dataUrl;
+                        document.getElementById('proof-preview').classList.remove('hidden');
+                    }
+                    img.src = e.target.result;
+                }
+                reader.readAsDataURL(file);
+            }
+
+            async function submitTest() {
+                if(!confirm('確定要送出測驗嗎？送出後無法修改。')) return;
+
+                const answers = { tf: {}, choice: {}, qa: {} };
+                
+                // Collect TF
+                document.querySelectorAll('div[data-qtype="tf"]').forEach(el => {
+                    const qId = el.getAttribute('data-qid');
+                    const checked = document.querySelector(`input[name="ans_${qId}"]:checked`);
+                    if(checked) answers.tf[qId] = checked.value;
+                });
+
+                // Collect Choice
+                document.querySelectorAll('div[data-qtype="choice"]').forEach(el => {
+                    const qId = el.getAttribute('data-qid');
+                    const checked = document.querySelector(`input[name="ans_${qId}"]:checked`);
+                    if(checked) answers.choice[qId] = checked.value;
+                });
+
+                // Collect QA
+                document.querySelectorAll('div[data-qtype="qa"]').forEach(el => {
+                    const qId = el.getAttribute('data-qid');
+                    const val = document.getElementById(`ans_${qId}`).value;
+                    if(val) answers.qa[qId] = val;
+                });
+
+                // Collect Canvas
+                let drawBase64 = '';
+                const canvasDiv = document.querySelector('div[data-qtype="draw"]');
+                if(canvasDiv) {
+                     const canvas = document.getElementById('drawing-canvas');
+                     drawBase64 = canvas.toDataURL('image/jpeg', 0.8);
+                }
+
+                const proofBase64 = document.getElementById('proof-base64').value;
+
+                const payload = {
+                    studentAccount: currentUser.account,
+                    articleId: currentTestArticleId,
+                    answers: answers,
+                    drawImageBase64: drawBase64,
+                    proofImageBase64: proofBase64
+                };
+
+                showLoading('批改與送出中...');
+                const res = await callAPI('submitTest', payload);
+                hideLoading();
+
+                if(res && res.success) {
+                    messageBox(`測驗完成！\n客觀題得分：${res.score}`);
+                    // Reset and hide
+                    document.getElementById('student-test-form').reset();
+                    document.getElementById('proof-preview').classList.add('hidden');
+                    document.getElementById('proof-base64').value = '';
+                    document.getElementById('student-test-area').classList.add('hidden');
+                    document.getElementById('student-article-select').value = '';
+                } else {
+                    messageBox(res.message, true);
+                }
+            }
+
+        </script>
+    </body>
+    </html>
