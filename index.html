@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>雲端閱讀認證系統</title>
+  <!-- 引入 Tailwind CSS 進行快速排版 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 引入 Phosphor Icons 作為圖示 -->
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    /* 自訂捲軸與過渡效果 */
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; }
+    .view-section { display: none; animation: fadeIn 0.3s ease-in-out; }
+    .view-section.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    /* 塗鴉畫布樣式 */
+    #drawing-canvas { border: 2px dashed #cbd5e1; border-radius: 0.5rem; touch-action: none; background-color: #fff; cursor: crosshair; }
+    /* 隱藏捲軸但可捲動 */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="text-gray-800">
+
+  <!-- 導覽列 -->
+  <nav class="bg-blue-600 text-white shadow-md p-4 flex justify-between items-center sticky top-0 z-40">
+    <div class="flex items-center gap-2 font-bold text-xl">
+      <i class="ph-fill ph-book-open-text text-2xl"></i>
+      閱讀認證小幫手
+    </div>
+    <div class="flex items-center gap-3">
+      <button onclick="showInfoModal()" class="hover:bg-blue-700 p-2 rounded-full transition"><i class="ph ph-info text-xl"></i></button>
+      <button onclick="showSettingsModal()" class="hover:bg-blue-700 p-2 rounded-full transition"><i class="ph ph-gear text-xl"></i></button>
+      <button id="logout-btn" onclick="logout()" class="hidden bg-red-500 hover:bg-red-600 px-3 py-1 rounded text-sm transition">登出</button>
+    </div>
+  </nav>
+
+  <!-- 全局提示框 (Toast/Modal) -->
+  <div id="msg-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
+    <div class="bg-white rounded-lg p-6 max-w-sm w-full shadow-xl transform transition-all text-center m-4">
+      <div id="msg-icon" class="text-4xl mb-3 text-blue-500"><i class="ph-fill ph-info"></i></div>
+      <h3 id="msg-title" class="text-lg font-bold mb-2">提示</h3>
+      <p id="msg-content" class="text-gray-600 mb-5"></p>
+      <button onclick="closeMsgModal()" class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition">確定</button>
+    </div>
+  </div>
+
+  <!-- 設定視窗 (⚙️) -->
+  <div id="settings-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
+    <div class="bg-white rounded-lg p-6 max-w-md w-full shadow-xl m-4">
+      <h3 class="text-xl font-bold mb-4 flex items-center gap-2"><i class="ph-fill ph-gear"></i> 系統設定</h3>
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700 mb-1">Google Apps Script Web App URL</label>
+        <input type="password" id="gas-url-input" class="w-full p-2 border rounded focus:ring focus:ring-blue-200" placeholder="https://script.google.com/macros/s/...">
+      </div>
+      <div class="flex gap-2">
+        <button onclick="saveSettings()" class="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition">儲存設定</button>
+        <button onclick="clearSettings()" class="flex-1 bg-red-100 text-red-600 py-2 rounded hover:bg-red-200 transition">重置/清除</button>
+        <button onclick="document.getElementById('settings-modal').classList.add('hidden')" class="px-4 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 說明視窗 (ℹ️) -->
+  <div id="info-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
+    <div class="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto m-4">
+      <h3 class="text-xl font-bold mb-4 flex items-center gap-2"><i class="ph-fill ph-info"></i> 部署教學與後端程式碼</h3>
+      <div class="prose text-sm text-gray-700 mb-4">
+        <ol class="list-decimal pl-5 space-y-2">
+          <li>開啟 Google 試算表，點擊「擴充功能」>「Apps Script」。</li>
+          <li>將下方發布的程式碼貼上，並存檔 (Code.gs)。</li>
+          <li>點選右上角「部署」>「新增部署作業」。</li>
+          <li>類型選擇「網頁應用程式」，執行身分選「我」，存取權限選「所有人」。</li>
+          <li>部署完成後，複製「網頁應用程式網址」，並貼到本系統的 ⚙️ 設定中。</li>
+        </ol>
+      </div>
+      <button onclick="copyGasCode()" class="mb-4 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition flex items-center gap-2">
+        <i class="ph ph-copy"></i> 一鍵複製後端程式碼
+      </button>
+      <div class="flex justify-end mt-4">
+        <button onclick="document.getElementById('info-modal').classList.add('hidden')" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">關閉</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 主要內容區 -->
+  <main class="container mx-auto p-4 max-w-4xl mt-4">
+    
+    <!-- 視圖 1: 登入與註冊入口 -->
+    <section id="view-login" class="view-section active max-w-md mx-auto bg-white p-8 rounded-xl shadow-sm border border-gray-100">
+      <div class="flex justify-center mb-6 border-b pb-2 gap-4">
+        <button id="tab-student" onclick="switchLoginTab('student')" class="text-lg font-bold text-blue-600 border-b-2 border-blue-600 px-2 pb-1">我是學生</button>
+        <button id="tab-teacher" onclick="switchLoginTab('teacher')" class="text-lg font-bold text-gray-400 px-2 pb-1">我是老師</button>
+      </div>
+      
+      <!-- 登入表單 -->
+      <form id="login-form" onsubmit="handleLogin(event)" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1" id="lbl-account">學生帳號 / 學號</label>
+          <input type="text" id="login-account" required class="w-full p-3 border rounded-lg focus:ring focus:ring-blue-200">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">密碼</label>
+          <input type="password" id="login-password" required class="w-full p-3 border rounded-lg focus:ring focus:ring-blue-200">
+        </div>
+        <button type="submit" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700 transition" id="btn-login">登入系統</button>
+      </form>
+
+      <!-- 教師專屬：註冊區域 -->
+      <div id="teacher-register-area" class="mt-6 pt-4 border-t hidden text-center text-sm text-gray-600">
+        第一次使用？ <button onclick="toggleRegisterForm()" class="text-blue-600 font-bold hover:underline">註冊教師帳號</button>
+      </div>
+
+      <!-- 註冊表單 (預設隱藏) -->
+      <form id="register-form" onsubmit="handleRegister(event)" class="space-y-4 hidden mt-4 bg-gray-50 p-4 rounded-lg">
+        <h4 class="font-bold text-center text-gray-700 mb-2">註冊教師帳號</h4>
+        <input type="text" id="reg-name" placeholder="您的姓名" required class="w-full p-2 border rounded">
+        <input type="text" id="reg-account" placeholder="設定帳號 (Email 或 ID)" required class="w-full p-2 border rounded">
+        <input type="password" id="reg-password" placeholder="設定密碼" required class="w-full p-2 border rounded">
+        <button type="submit" class="w-full bg-green-500 text-white p-2 rounded font-bold hover:bg-green-600 transition">送出註冊</button>
+      </form>
+
+      <!-- 系統初始化按鈕 -->
+      <div class="mt-8 text-center">
+        <button onclick="initSystem()" class="text-xs text-gray-400 hover:text-gray-600"><i class="ph ph-database"></i> 首次建置：初始化資料庫工作表</button>
+      </div>
+    </section>
+
+    <!-- 視圖 2: 教師後台 (簡化版) -->
+    <section id="view-teacher" class="view-section">
+      <div class="bg-white p-6 rounded-xl shadow-sm mb-6 flex justify-between items-center">
+        <div>
+          <h2 class="text-2xl font-bold text-gray-800">教師管理後台</h2>
+          <p class="text-gray-500" id="teacher-welcome">歡迎回來，老師！</p>
+        </div>
+        <a href="#" id="sheet-link" target="_blank" class="bg-green-100 text-green-700 px-4 py-2 rounded-lg hover:bg-green-200 transition font-medium flex items-center gap-2">
+          <i class="ph-fill ph-microsoft-excel-logo"></i> 開啟試算表大量編輯
+        </a>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- 快速統計/提示 -->
+        <div class="bg-blue-50 p-6 rounded-xl border border-blue-100">
+          <h3 class="font-bold text-blue-800 mb-2"><i class="ph ph-lightbulb"></i> 系統操作建議</h3>
+          <p class="text-sm text-blue-700 mb-2">1. 請點擊上方按鈕直接進入 Google 試算表。</p>
+          <p class="text-sm text-blue-700 mb-2">2. 在【班級資料】與【學生資料】表中建立名單。</p>
+          <p class="text-sm text-blue-700">3. 在【文章資料】及各題型表中依照「文章編號」關聯建立題庫。</p>
+        </div>
+        <div class="bg-orange-50 p-6 rounded-xl border border-orange-100 flex flex-col items-center justify-center text-center">
+           <i class="ph-fill ph-users-three text-4xl text-orange-400 mb-2"></i>
+           <p class="text-gray-700 font-medium">目前系統採用試算表作為強大後台<br>請善用試算表的複製貼上功能來建置龐大題庫！</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 視圖 3: 學生測驗前台 -->
+    <section id="view-student" class="view-section">
+      <div class="bg-white p-6 rounded-xl shadow-sm mb-6">
+        <h2 class="text-2xl font-bold text-gray-800" id="student-welcome">歡迎，同學！</h2>
+        <p class="text-gray-500 mb-4">請選擇您要進行認證的文章。</p>
+        
+        <select id="article-select" onchange="loadArticleTest()" class="w-full p-3 border-2 border-blue-200 rounded-lg text-lg focus:outline-none focus:border-blue-500">
+          <option value="">-- 請選擇文章 --</option>
+          <!-- 動態載入文章清單 -->
+        </select>
+      </div>
+
+      <!-- 測驗區域 (選擇文章後顯示) -->
+      <div id="test-area" class="hidden space-y-6">
+        <!-- 文章內容區 -->
+        <div class="bg-yellow-50 p-6 rounded-xl border border-yellow-200 shadow-sm">
+          <h3 class="text-xl font-bold text-yellow-800 mb-4" id="display-article-title">文章標題</h3>
+          <div class="text-gray-700 leading-relaxed whitespace-pre-wrap" id="display-article-content">文章內容...</div>
+        </div>
+
+        <!-- 作答表單 -->
+        <form id="test-form" onsubmit="submitTest(event)" class="space-y-6">
+          <input type="hidden" id="current-article-id">
+          
+          <div id="questions-container" class="space-y-6">
+            <!-- 題目動態生成於此 -->
+          </div>
+
+          <!-- 塗鴉區 -->
+          <div id="draw-area-container" class="hidden bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+            <h4 class="font-bold text-lg mb-2 flex items-center gap-2"><i class="ph-fill ph-palette"></i> 創意塗鴉題</h4>
+            <p id="draw-question-text" class="text-gray-600 mb-4"></p>
+            <div class="flex justify-between items-center mb-2">
+              <div class="flex gap-2">
+                <button type="button" onclick="setDrawColor('#000000')" class="w-8 h-8 rounded-full bg-black ring-2 ring-offset-1 ring-gray-300"></button>
+                <button type="button" onclick="setDrawColor('#EF4444')" class="w-8 h-8 rounded-full bg-red-500"></button>
+                <button type="button" onclick="setDrawColor('#3B82F6')" class="w-8 h-8 rounded-full bg-blue-500"></button>
+                <button type="button" onclick="setDrawColor('#10B981')" class="w-8 h-8 rounded-full bg-green-500"></button>
+              </div>
+              <button type="button" onclick="clearCanvas()" class="text-sm text-red-500 hover:bg-red-50 px-3 py-1 rounded">清除畫布</button>
+            </div>
+            <canvas id="drawing-canvas" width="400" height="300" class="w-full max-w-[400px] mx-auto block"></canvas>
+          </div>
+
+          <!-- 閱讀證明上傳區 -->
+          <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+             <h4 class="font-bold text-lg mb-2 flex items-center gap-2"><i class="ph-fill ph-camera"></i> 閱讀證明上傳</h4>
+             <p class="text-sm text-gray-500 mb-4">請拍下您閱讀的書籍封面或閱讀過程（系統會自動壓縮）。</p>
+             <input type="file" id="proof-upload" accept="image/*" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" onchange="handleImageUpload(event)">
+             <div class="mt-4 hidden" id="preview-container">
+               <p class="text-xs text-green-600 mb-1">圖片已準備就緒：</p>
+               <img id="proof-preview" class="max-h-48 rounded border">
+               <input type="hidden" id="proof-base64">
+             </div>
+          </div>
+
+          <button type="submit" id="submit-test-btn" class="w-full bg-green-600 text-white p-4 rounded-xl font-bold text-lg hover:bg-green-700 transition shadow-lg flex justify-center items-center gap-2">
+            <i class="ph-fill ph-paper-plane-tilt"></i> 送出測驗結果
+          </button>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    /* =========================================
+       全局狀態與基礎設定
+    ========================================= */
+    const STATE = {
+      gasUrl: localStorage.getItem('gasUrl') || '',
+      user: JSON.parse(localStorage.getItem('user')) || null,
+      role: localStorage.getItem('role') || 'student',
+      loginTab: 'student', // 登入頁籤狀態
+      studentData: null // 存放載入的題庫
+    };
+
+    // 啟動時檢查
+    window.onload = () => {
+      if (!STATE.gasUrl) {
+        showMsg('歡迎使用', '請先點擊右上角 ⚙️ 設定您的後端 GAS 網址。');
+        showSettingsModal();
+      }
+      checkLoginState();
+      initCanvas(); // 初始化畫布
+    };
+
+    /* =========================================
+       UI 與 Modal 控制
+    ========================================= */
+    function showMsg(title, content, type = 'info') {
+      document.getElementById('msg-title').innerText = title;
+      document.getElementById('msg-content').innerText = content;
+      document.getElementById('msg-icon').innerHTML = type === 'error' ? '<i class="ph-fill ph-warning-circle text-red-500"></i>' : (type === 'success' ? '<i class="ph-fill ph-check-circle text-green-500"></i>' : '<i class="ph-fill ph-info text-blue-500"></i>');
+      document.getElementById('msg-modal').classList.remove('hidden');
+    }
+    function closeMsgModal() { document.getElementById('msg-modal').classList.add('hidden'); }
+    function showSettingsModal() { 
+      document.getElementById('gas-url-input').value = STATE.gasUrl;
+      document.getElementById('settings-modal').classList.remove('hidden'); 
+    }
+    function showInfoModal() { document.getElementById('info-modal').classList.remove('hidden'); }
+
+    function switchView(viewId) {
+      document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+      document.getElementById(viewId).classList.add('active');
+    }
+
+    function switchLoginTab(role) {
+      STATE.loginTab = role;
+      document.getElementById('tab-student').className = role === 'student' ? 'text-lg font-bold text-blue-600 border-b-2 border-blue-600 px-2 pb-1' : 'text-lg font-bold text-gray-400 px-2 pb-1';
+      document.getElementById('tab-teacher').className = role === 'teacher' ? 'text-lg font-bold text-blue-600 border-b-2 border-blue-600 px-2 pb-1' : 'text-lg font-bold text-gray-400 px-2 pb-1';
+      document.getElementById('lbl-account').innerText = role === 'student' ? '學生帳號 / 學號' : '教師帳號 (Email/ID)';
+      document.getElementById('teacher-register-area').style.display = role === 'teacher' ? 'block' : 'none';
+      document.getElementById('register-form').classList.add('hidden');
+    }
+
+    function toggleRegisterForm() {
+      document.getElementById('register-form').classList.toggle('hidden');
+    }
+
+    /* =========================================
+       設定管理
+    ========================================= */
+    function saveSettings() {
+      const url = document.getElementById('gas-url-input').value.trim();
+      if (!url.startsWith('https://script.google.com/')) {
+        showMsg('錯誤', '請輸入正確的 GAS Web App 網址', 'error');
+        return;
+      }
+      localStorage.setItem('gasUrl', url);
+      STATE.gasUrl = url;
+      document.getElementById('settings-modal').classList.add('hidden');
+      showMsg('成功', '系統設定已儲存！', 'success');
+      // 更新連結
+      document.getElementById('sheet-link').href = url.replace('/exec', '/edit'); 
+    }
+
+    function clearSettings() {
+      if (confirm('確定要清除所有設定與登入狀態嗎？將會重新整理頁面。')) {
+        localStorage.clear();
+        location.reload();
+      }
+    }
+
+    /* =========================================
+       API 呼叫封裝 (Fetch)
+    ========================================= */
+    async function callAPI(action, data = {}) {
+      if (!STATE.gasUrl) {
+        showMsg('錯誤', '請先設定 GAS 網址', 'error');
+        throw new Error('No GAS URL');
+      }
+      // 顯示載入中... (簡易處理)
+      const btn = document.activeElement;
+      const originalText = btn.innerText;
+      if (btn && btn.tagName === 'BUTTON') { btn.innerText = '處理中...'; btn.disabled = true; }
+
+      try {
+        const response = await fetch(STATE.gasUrl, {
+          method: 'POST',
+          body: JSON.stringify({ action: action, data: data })
+        });
+        const result = await response.json();
+        if (btn && btn.tagName === 'BUTTON') { btn.innerText = originalText; btn.disabled = false; }
+        return result;
+      } catch (error) {
+        if (btn && btn.tagName === 'BUTTON') { btn.innerText = originalText; btn.disabled = false; }
+        showMsg('連線錯誤', '無法連接到伺服器，請檢查網路或 GAS 網址。', 'error');
+        console.error(error);
+        throw error;
+      }
+    }
+
+    /* =========================================
+       帳號權限邏輯
+    ========================================= */
+    async function initSystem() {
+      try {
+        const res = await callAPI('init');
+        showMsg('初始化結果', res.message, res.status);
+      } catch(e) {}
+    }
+
+    async function handleRegister(e) {
+      e.preventDefault();
+      const name = document.getElementById('reg-name').value;
+      const account = document.getElementById('reg-account').value;
+      const password = document.getElementById('reg-password').value;
+      
+      const res = await callAPI('registerTeacher', { name, account, password });
+      if (res.status === 'success') {
+        showMsg('註冊成功', '請使用剛建立的帳號登入', 'success');
+        document.getElementById('register-form').reset();
+        toggleRegisterForm();
+      } else {
+        showMsg('註冊失敗', res.message, 'error');
+      }
+    }
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      const account = document.getElementById('login-account').value;
+      const password = document.getElementById('login-password').value;
+      
+      const res = await callAPI('login', { role: STATE.loginTab, account, password });
+      
+      if (res.status === 'success') {
+        STATE.user = res.user;
+        STATE.role = res.role;
+        localStorage.setItem('user', JSON.stringify(res.user));
+        localStorage.setItem('role', res.role);
+        
+        document.getElementById('login-form').reset();
+        checkLoginState();
+      } else {
+        showMsg('登入失敗', res.message, 'error');
+      }
+    }
+
+    function logout() {
+      STATE.user = null;
+      localStorage.removeItem('user');
+      localStorage.removeItem('role');
+      checkLoginState();
+    }
+
+    function checkLoginState() {
+      if (STATE.user) {
+        document.getElementById('logout-btn').classList.remove('hidden');
+        if (STATE.role === 'teacher') {
+          switchView('view-teacher');
+          document.getElementById('teacher-welcome').innerText = `歡迎回來，${STATE.user['教師姓名']} 老師！`;
+          // 設定直接開啟試算表的連結 (透過拆解 GAS 網址)
+          if(STATE.gasUrl) {
+            let match = STATE.gasUrl.match(/\/macros\/s\/(.+)\/exec/);
+            if(match) document.getElementById('sheet-link').href = `https://script.google.com/macros/s/${match[1]}/edit`;
+          }
+        } else {
+          switchView('view-student');
+          document.getElementById('student-welcome').innerText = `歡迎，${STATE.user['學生姓名']} 同學！`;
+          loadStudentDashboard();
+        }
+      } else {
+        document.getElementById('logout-btn').classList.add('hidden');
+        switchView('view-login');
+      }
+    }
+
+    /* =========================================
+       學生前台邏輯
+    ========================================= */
+    async function loadStudentDashboard() {
+      try {
+        const res = await callAPI('getStudentData');
+        if (res.status === 'success') {
+          STATE.studentData = res;
+          const select = document.getElementById('article-select');
+          select.innerHTML = '<option value="">-- 請選擇文章 --</option>';
+          res.articles.forEach(art => {
+            select.innerHTML += `<option value="${art['文章編號']}">${art['文章編號']} - ${art['文章標題']}</option>`;
+          });
+        }
+      } catch(e) {}
+    }
+
+    function loadArticleTest() {
+      const artId = document.getElementById('article-select').value;
+      const testArea = document.getElementById('test-area');
+      
+      if (!artId) { testArea.classList.add('hidden'); return; }
+      
+      const data = STATE.studentData;
+      const article = data.articles.find(a => a['文章編號'] === artId);
+      
+      document.getElementById('current-article-id').value = artId;
+      document.getElementById('display-article-title').innerText = article['文章標題'];
+      document.getElementById('display-article-content').innerText = article['文章內容'];
+      
+      // 動態生成題目
+      const qContainer = document.getElementById('questions-container');
+      qContainer.innerHTML = '';
+      
+      // 是非題
+      const tfs = data.questions.tf.filter(q => q['文章編號'] === artId);
+      tfs.forEach((q, i) => {
+        qContainer.innerHTML += `
+          <div class="bg-white p-4 rounded-lg border border-gray-200">
+            <p class="font-bold mb-2"><span class="text-blue-500 mr-1">Q${i+1}. (是非)</span> ${q['題目內容']}</p>
+            <div class="flex gap-4">
+              <label class="flex items-center gap-1 cursor-pointer"><input type="radio" name="tf_${q['題目編號']}" value="O" required class="w-4 h-4"> O (是)</label>
+              <label class="flex items-center gap-1 cursor-pointer"><input type="radio" name="tf_${q['題目編號']}" value="X" required class="w-4 h-4"> X (否)</label>
+            </div>
+          </div>`;
+      });
+
+      // 選擇題
+      const mcs = data.questions.mc.filter(q => q['文章編號'] === artId);
+      mcs.forEach((q, i) => {
+        const opts = String(q['選項']).split(',').map(o => o.trim());
+        let optsHtml = opts.map(o => `
+          <label class="block cursor-pointer p-2 hover:bg-gray-50 rounded border border-transparent hover:border-gray-200 transition">
+            <input type="radio" name="mc_${q['題目編號']}" value="${o}" required class="mr-2">${o}
+          </label>
+        `).join('');
+        qContainer.innerHTML += `
+          <div class="bg-white p-4 rounded-lg border border-gray-200">
+            <p class="font-bold mb-2"><span class="text-green-500 mr-1">Q${tfs.length+i+1}. (選擇)</span> ${q['題目內容']}</p>
+            <div class="space-y-1">${optsHtml}</div>
+          </div>`;
+      });
+
+      // 問答題
+      const sas = data.questions.sa.filter(q => q['文章編號'] === artId);
+      sas.forEach((q, i) => {
+        qContainer.innerHTML += `
+          <div class="bg-white p-4 rounded-lg border border-gray-200">
+            <p class="font-bold mb-2"><span class="text-purple-500 mr-1">Q${tfs.length+mcs.length+i+1}. (問答)</span> ${q['題目內容']}</p>
+            <textarea name="sa_${q['題目編號']}" rows="3" required class="w-full p-2 border rounded focus:ring focus:ring-blue-200"></textarea>
+          </div>`;
+      });
+
+      // 塗鴉題處理
+      const draws = data.questions.draw.filter(q => q['文章編號'] === artId);
+      const drawArea = document.getElementById('draw-area-container');
+      if (draws.length > 0) {
+        document.getElementById('draw-question-text').innerText = draws[0]['題目內容'];
+        drawArea.classList.remove('hidden');
+        clearCanvas(); // 清空舊畫布
+      } else {
+        drawArea.classList.add('hidden');
+      }
+
+      // 重置圖片上傳區
+      document.getElementById('proof-upload').value = '';
+      document.getElementById('proof-base64').value = '';
+      document.getElementById('preview-container').classList.add('hidden');
+
+      testArea.classList.remove('hidden');
+    }
+
+    /* =========================================
+       Canvas 塗鴉邏輯
+    ========================================= */
+    let canvas, ctx, isDrawing = false;
+    let currentStrokeColor = '#000000';
+
+    function initCanvas() {
+      canvas = document.getElementById('drawing-canvas');
+      ctx = canvas.getContext('2d');
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = 3;
+
+      // Mouse Events
+      canvas.addEventListener('mousedown', startPosition);
+      canvas.addEventListener('mouseup', endPosition);
+      canvas.addEventListener('mousemove', draw);
+      // Touch Events
+      canvas.addEventListener('touchstart', (e) => { e.preventDefault(); startPosition(e.touches[0]); }, {passive: false});
+      canvas.addEventListener('touchend', endPosition);
+      canvas.addEventListener('touchmove', (e) => { e.preventDefault(); draw(e.touches[0]); }, {passive: false});
+    }
+
+    function getMousePos(evt) {
+      const rect = canvas.getBoundingClientRect();
+      // 處理 CSS 縮放導致的座標偏移
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      return {
+        x: (evt.clientX - rect.left) * scaleX,
+        y: (evt.clientY - rect.top) * scaleY
+      };
+    }
+
+    function startPosition(e) { isDrawing = true; draw(e); }
+    function endPosition() { isDrawing = false; ctx.beginPath(); }
+    function draw(e) {
+      if (!isDrawing) return;
+      const pos = getMousePos(e);
+      ctx.strokeStyle = currentStrokeColor;
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(pos.x, pos.y);
+    }
+    function setDrawColor(color) { currentStrokeColor = color; }
+    function clearCanvas() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    /* =========================================
+       圖片壓縮與上傳 (400px)
+    ========================================= */
+    function handleImageUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          const cvs = document.createElement('canvas');
+          const maxW = 400;
+          let w = img.width, h = img.height;
+          if (w > maxW) { h *= maxW / w; w = maxW; }
+          cvs.width = w; cvs.height = h;
+          const context = cvs.getContext('2d');
+          context.drawImage(img, 0, 0, w, h);
+          
+          const base64Str = cvs.toDataURL('image/jpeg', 0.8);
+          document.getElementById('proof-base64').value = base64Str;
+          document.getElementById('proof-preview').src = base64Str;
+          document.getElementById('preview-container').classList.remove('hidden');
+        }
+        img.src = e.target.result;
+      }
+      reader.readAsDataURL(file);
+    }
+
+    /* =========================================
+       提交測驗
+    ========================================= */
+    async function submitTest(e) {
+      e.preventDefault();
+      
+      const formData = new FormData(e.target);
+      const tfAnswers = {}, mcAnswers = {}, saAnswers = {};
+      
+      // 分類提取答案
+      for (let [key, value] of formData.entries()) {
+        if (key.startsWith('tf_')) tfAnswers[key.replace('tf_', '')] = value;
+        else if (key.startsWith('mc_')) mcAnswers[key.replace('mc_', '')] = value;
+        else if (key.startsWith('sa_')) saAnswers[key.replace('sa_', '')] = value;
+      }
+
+      // 處理塗鴉圖片
+      const drawArea = document.getElementById('draw-area-container');
+      let drawImage = '';
+      if (!drawArea.classList.contains('hidden')) {
+        // 確保背景是白色的
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width; tempCanvas.height = canvas.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.fillStyle = '#ffffff';
+        tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+        tempCtx.drawImage(canvas, 0, 0);
+        drawImage = tempCanvas.toDataURL('image/jpeg', 0.8);
+      }
+
+      const payload = {
+        studentAccount: STATE.user['學生帳號'],
+        articleId: document.getElementById('current-article-id').value,
+        tfAnswers, mcAnswers, saAnswers,
+        drawImage,
+        proofImage: document.getElementById('proof-base64').value
+      };
+
+      try {
+        const res = await callAPI('submitTest', payload);
+        if (res.status === 'success') {
+          showMsg('測驗完成', `太棒了！你的成績是：${res.score}`, 'success');
+          document.getElementById('test-area').classList.add('hidden');
+          document.getElementById('article-select').value = '';
+        }
+      } catch (err) {}
+    }
+
+    /* =========================================
+       其他輔助功能
+    ========================================= */
+    function copyGasCode() {
+      // 提供一段純文字提示，實務上可把 Code.gs 包在此以供複製
+      const dummyCode = `// 雲端閱讀認證測驗系統 - 後端 API
+// 請參閱對話框提供的 Code.gs 檔案內容，複製並貼上至 Apps Script 編輯器中。`;
+      navigator.clipboard.writeText(dummyCode).then(() => {
+        alert("提示：請直接複製對話記錄中生成的 Code.gs 內容！");
+      });
+    }
+  </script>
+</body>
+</html>
