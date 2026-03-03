@@ -3,22 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>雲端閱讀認證系統</title>
-  <!-- 引入 Tailwind CSS 進行快速排版 -->
+  <title>閱讀認證系統 - 教室管理版</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- 引入 Phosphor Icons 作為圖示 -->
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
   <style>
-    /* 自訂捲軸與過渡效果 */
     body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; }
     .view-section { display: none; animation: fadeIn 0.3s ease-in-out; }
     .view-section.active { display: block; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    /* 塗鴉畫布樣式 */
     #drawing-canvas { border: 2px dashed #cbd5e1; border-radius: 0.5rem; touch-action: none; background-color: #fff; cursor: crosshair; }
-    /* 隱藏捲軸但可捲動 */
-    .no-scrollbar::-webkit-scrollbar { display: none; }
-    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   </style>
 </head>
 <body class="text-gray-800">
@@ -27,18 +20,17 @@
   <nav class="bg-blue-600 text-white shadow-md p-4 flex justify-between items-center sticky top-0 z-40">
     <div class="flex items-center gap-2 font-bold text-xl">
       <i class="ph-fill ph-book-open-text text-2xl"></i>
-      閱讀認證小幫手
+      閱讀認證小幫手 (本機測試版)
     </div>
     <div class="flex items-center gap-3">
-      <button onclick="showInfoModal()" class="hover:bg-blue-700 p-2 rounded-full transition"><i class="ph ph-info text-xl"></i></button>
-      <button onclick="showSettingsModal()" class="hover:bg-blue-700 p-2 rounded-full transition"><i class="ph ph-gear text-xl"></i></button>
+      <button onclick="clearAllData()" class="hover:bg-red-500 p-2 rounded text-sm transition bg-red-400">重置所有資料</button>
       <button id="logout-btn" onclick="logout()" class="hidden bg-red-500 hover:bg-red-600 px-3 py-1 rounded text-sm transition">登出</button>
     </div>
   </nav>
 
-  <!-- 全局提示框 (Toast/Modal) -->
+  <!-- 全局提示框 -->
   <div id="msg-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
-    <div class="bg-white rounded-lg p-6 max-w-sm w-full shadow-xl transform transition-all text-center m-4">
+    <div class="bg-white rounded-lg p-6 max-w-sm w-full shadow-xl text-center m-4">
       <div id="msg-icon" class="text-4xl mb-3 text-blue-500"><i class="ph-fill ph-info"></i></div>
       <h3 id="msg-title" class="text-lg font-bold mb-2">提示</h3>
       <p id="msg-content" class="text-gray-600 mb-5"></p>
@@ -46,202 +38,135 @@
     </div>
   </div>
 
-  <!-- 設定視窗 (⚙️) -->
-  <div id="settings-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
-    <div class="bg-white rounded-lg p-6 max-w-md w-full shadow-xl m-4">
-      <h3 class="text-xl font-bold mb-4 flex items-center gap-2"><i class="ph-fill ph-gear"></i> 系統設定</h3>
-      <div class="mb-4">
-        <label class="block text-sm font-medium text-gray-700 mb-1">Google Apps Script Web App URL</label>
-        <input type="password" id="gas-url-input" class="w-full p-2 border rounded focus:ring focus:ring-blue-200" placeholder="https://script.google.com/macros/s/...">
-      </div>
-      <div class="flex gap-2">
-        <button onclick="saveSettings()" class="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition">儲存設定</button>
-        <button onclick="clearSettings()" class="flex-1 bg-red-100 text-red-600 py-2 rounded hover:bg-red-200 transition">重置/清除</button>
-        <button onclick="document.getElementById('settings-modal').classList.add('hidden')" class="px-4 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">取消</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 說明視窗 (ℹ️) -->
-  <div id="info-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
-    <div class="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto m-4">
-      <h3 class="text-xl font-bold mb-4 flex items-center gap-2"><i class="ph-fill ph-info"></i> 部署教學與後端程式碼</h3>
-      <div class="prose text-sm text-gray-700 mb-4">
-        <ol class="list-decimal pl-5 space-y-2">
-          <li>開啟 Google 試算表，點擊「擴充功能」>「Apps Script」。</li>
-          <li>將下方發布的程式碼貼上，並存檔 (Code.gs)。</li>
-          <li>點選右上角「部署」>「新增部署作業」。</li>
-          <li>類型選擇「網頁應用程式」，執行身分選「我」，存取權限選「所有人」。</li>
-          <li>部署完成後，複製「網頁應用程式網址」，並貼到本系統的 ⚙️ 設定中。</li>
-        </ol>
-      </div>
-      <button onclick="copyGasCode()" class="mb-4 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition flex items-center gap-2">
-        <i class="ph ph-copy"></i> 一鍵複製後端程式碼
-      </button>
-      <div class="flex justify-end mt-4">
-        <button onclick="document.getElementById('info-modal').classList.add('hidden')" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">關閉</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 主要內容區 -->
   <main class="container mx-auto p-4 max-w-4xl mt-4">
     
-    <!-- 視圖 1: 登入與註冊入口 -->
+    <!-- ==================== 視圖 1: 登入 ==================== -->
     <section id="view-login" class="view-section active max-w-md mx-auto bg-white p-8 rounded-xl shadow-sm border border-gray-100">
       <div class="flex justify-center mb-6 border-b pb-2 gap-4">
         <button id="tab-student" onclick="switchLoginTab('student')" class="text-lg font-bold text-blue-600 border-b-2 border-blue-600 px-2 pb-1">我是學生</button>
         <button id="tab-teacher" onclick="switchLoginTab('teacher')" class="text-lg font-bold text-gray-400 px-2 pb-1">我是老師</button>
       </div>
       
-      <!-- 登入表單 -->
       <form id="login-form" onsubmit="handleLogin(event)" class="space-y-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1" id="lbl-account">學生帳號 / 學號</label>
+          <label class="block text-sm font-medium text-gray-700 mb-1" id="lbl-account">學生帳號</label>
           <input type="text" id="login-account" required class="w-full p-3 border rounded-lg focus:ring focus:ring-blue-200">
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">密碼</label>
           <input type="password" id="login-password" required class="w-full p-3 border rounded-lg focus:ring focus:ring-blue-200">
         </div>
-        <button type="submit" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700 transition" id="btn-login">登入系統</button>
+        <button type="submit" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700 transition">登入系統</button>
       </form>
-
-      <!-- 教師專屬：註冊區域 -->
-      <div id="teacher-register-area" class="mt-6 pt-4 border-t hidden text-center text-sm text-gray-600">
-        第一次使用？ <button onclick="toggleRegisterForm()" class="text-blue-600 font-bold hover:underline">註冊教師帳號</button>
-      </div>
-
-      <!-- 註冊表單 (預設隱藏) -->
-      <form id="register-form" onsubmit="handleRegister(event)" class="space-y-4 hidden mt-4 bg-gray-50 p-4 rounded-lg">
-        <h4 class="font-bold text-center text-gray-700 mb-2">註冊教師帳號</h4>
-        <input type="text" id="reg-name" placeholder="您的姓名" required class="w-full p-2 border rounded">
-        <input type="text" id="reg-account" placeholder="設定帳號 (Email 或 ID)" required class="w-full p-2 border rounded">
-        <input type="password" id="reg-password" placeholder="設定密碼" required class="w-full p-2 border rounded">
-        <button type="submit" class="w-full bg-green-500 text-white p-2 rounded font-bold hover:bg-green-600 transition">送出註冊</button>
-      </form>
-
-      <!-- 系統初始化按鈕 -->
-      <div class="mt-8 text-center">
-        <button onclick="initSystem()" class="text-xs text-gray-400 hover:text-gray-600"><i class="ph ph-database"></i> 首次建置：初始化資料庫工作表</button>
+      
+      <div id="teacher-hint" class="mt-4 text-xs text-center text-gray-500 hidden">
+        (測試版預設教師帳號: admin / 密碼: admin)
       </div>
     </section>
 
-    <!-- 視圖 2: 教師後台 (簡化版) -->
+    <!-- ==================== 視圖 2: 教師後台 ==================== -->
     <section id="view-teacher" class="view-section">
       <div class="bg-white p-6 rounded-xl shadow-sm mb-6 flex justify-between items-center">
         <div>
           <h2 class="text-2xl font-bold text-gray-800">教師管理後台</h2>
           <p class="text-gray-500" id="teacher-welcome">歡迎回來，老師！</p>
         </div>
-        <a href="#" id="sheet-link" target="_blank" class="bg-green-100 text-green-700 px-4 py-2 rounded-lg hover:bg-green-200 transition font-medium flex items-center gap-2">
-          <i class="ph-fill ph-microsoft-excel-logo"></i> 開啟試算表大量編輯
-        </a>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <!-- 快速統計/提示 -->
-        <div class="bg-blue-50 p-6 rounded-xl border border-blue-100">
-          <h3 class="font-bold text-blue-800 mb-2"><i class="ph ph-lightbulb"></i> 系統操作建議</h3>
-          <p class="text-sm text-blue-700 mb-2">1. 請點擊上方按鈕直接進入 Google 試算表。</p>
-          <p class="text-sm text-blue-700 mb-2">2. 在【班級資料】與【學生資料】表中建立名單。</p>
-          <p class="text-sm text-blue-700">3. 在【文章資料】及各題型表中依照「文章編號」關聯建立題庫。</p>
-        </div>
-        <div class="bg-orange-50 p-6 rounded-xl border border-orange-100 flex flex-col items-center justify-center text-center">
-           <i class="ph-fill ph-users-three text-4xl text-orange-400 mb-2"></i>
-           <p class="text-gray-700 font-medium">目前系統採用試算表作為強大後台<br>請善用試算表的複製貼上功能來建置龐大題庫！</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- 視圖 3: 學生測驗前台 -->
-    <section id="view-student" class="view-section">
-      <div class="bg-white p-6 rounded-xl shadow-sm mb-6">
-        <h2 class="text-2xl font-bold text-gray-800" id="student-welcome">歡迎，同學！</h2>
-        <p class="text-gray-500 mb-4">請選擇您要進行認證的文章。</p>
-        
-        <select id="article-select" onchange="loadArticleTest()" class="w-full p-3 border-2 border-blue-200 rounded-lg text-lg focus:outline-none focus:border-blue-500">
-          <option value="">-- 請選擇文章 --</option>
-          <!-- 動態載入文章清單 -->
-        </select>
-      </div>
-
-      <!-- 測驗區域 (選擇文章後顯示) -->
-      <div id="test-area" class="hidden space-y-6">
-        <!-- 文章內容區 -->
-        <div class="bg-yellow-50 p-6 rounded-xl border border-yellow-200 shadow-sm">
-          <h3 class="text-xl font-bold text-yellow-800 mb-4" id="display-article-title">文章標題</h3>
-          <div class="text-gray-700 leading-relaxed whitespace-pre-wrap" id="display-article-content">文章內容...</div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- 左側：班級列表 -->
+        <div class="col-span-1 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+          <h3 class="font-bold text-lg mb-4 flex items-center justify-between">
+            <span>班級列表</span>
+            <button onclick="addClass()" class="text-sm bg-blue-100 text-blue-600 px-2 py-1 rounded hover:bg-blue-200"><i class="ph ph-plus"></i> 新增</button>
+          </h3>
+          <ul id="class-list" class="space-y-2">
+            <!-- 班級列表動態生成 -->
+          </ul>
         </div>
 
-        <!-- 作答表單 -->
-        <form id="test-form" onsubmit="submitTest(event)" class="space-y-6">
-          <input type="hidden" id="current-article-id">
+        <!-- 右側：學生管理 -->
+        <div class="col-span-1 md:col-span-2 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+          <div id="student-manager-empty" class="text-center text-gray-400 py-10">
+            請先從左側選擇一個班級以管理學生。
+          </div>
           
-          <div id="questions-container" class="space-y-6">
-            <!-- 題目動態生成於此 -->
-          </div>
-
-          <!-- 塗鴉區 -->
-          <div id="draw-area-container" class="hidden bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-            <h4 class="font-bold text-lg mb-2 flex items-center gap-2"><i class="ph-fill ph-palette"></i> 創意塗鴉題</h4>
-            <p id="draw-question-text" class="text-gray-600 mb-4"></p>
-            <div class="flex justify-between items-center mb-2">
+          <div id="student-manager-content" class="hidden">
+            <h3 class="font-bold text-lg mb-2 flex items-center justify-between">
+              <span id="current-class-name-display">目前班級：--</span>
+              <button onclick="editCurrentClass()" class="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded hover:bg-gray-200">修改班級名稱</button>
+            </h3>
+            
+            <div class="bg-blue-50 p-4 rounded-lg mb-4 flex flex-col gap-2">
+              <h4 class="font-bold text-blue-800 text-sm">批次新增學生</h4>
               <div class="flex gap-2">
-                <button type="button" onclick="setDrawColor('#000000')" class="w-8 h-8 rounded-full bg-black ring-2 ring-offset-1 ring-gray-300"></button>
-                <button type="button" onclick="setDrawColor('#EF4444')" class="w-8 h-8 rounded-full bg-red-500"></button>
-                <button type="button" onclick="setDrawColor('#3B82F6')" class="w-8 h-8 rounded-full bg-blue-500"></button>
-                <button type="button" onclick="setDrawColor('#10B981')" class="w-8 h-8 rounded-full bg-green-500"></button>
+                 <input type="number" id="batch-student-count" min="1" max="50" value="5" class="w-20 p-2 border rounded" placeholder="數量">
+                 <input type="text" id="batch-student-prefix" class="flex-1 p-2 border rounded" placeholder="帳號前綴 (例: S01)">
+                 <button onclick="batchCreateStudents()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">批次建立</button>
               </div>
-              <button type="button" onclick="clearCanvas()" class="text-sm text-red-500 hover:bg-red-50 px-3 py-1 rounded">清除畫布</button>
+              <p class="text-xs text-blue-600">系統將自動產生帳號 (前綴+編號) 與隨機 6 碼密碼。</p>
             </div>
-            <canvas id="drawing-canvas" width="400" height="300" class="w-full max-w-[400px] mx-auto block"></canvas>
-          </div>
 
-          <!-- 閱讀證明上傳區 -->
-          <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-             <h4 class="font-bold text-lg mb-2 flex items-center gap-2"><i class="ph-fill ph-camera"></i> 閱讀證明上傳</h4>
-             <p class="text-sm text-gray-500 mb-4">請拍下您閱讀的書籍封面或閱讀過程（系統會自動壓縮）。</p>
-             <input type="file" id="proof-upload" accept="image/*" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" onchange="handleImageUpload(event)">
-             <div class="mt-4 hidden" id="preview-container">
-               <p class="text-xs text-green-600 mb-1">圖片已準備就緒：</p>
-               <img id="proof-preview" class="max-h-48 rounded border">
-               <input type="hidden" id="proof-base64">
-             </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-sm border-collapse">
+                <thead>
+                  <tr class="bg-gray-100">
+                    <th class="p-2 border-b">學生帳號</th>
+                    <th class="p-2 border-b">姓名</th>
+                    <th class="p-2 border-b">密碼 (點擊可見)</th>
+                    <th class="p-2 border-b w-24">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="student-list-tbody">
+                  <!-- 學生列表動態生成 -->
+                </tbody>
+              </table>
+            </div>
           </div>
-
-          <button type="submit" id="submit-test-btn" class="w-full bg-green-600 text-white p-4 rounded-xl font-bold text-lg hover:bg-green-700 transition shadow-lg flex justify-center items-center gap-2">
-            <i class="ph-fill ph-paper-plane-tilt"></i> 送出測驗結果
-          </button>
-        </form>
+        </div>
       </div>
     </section>
+
+    <!-- ==================== 視圖 3: 學生前台 ==================== -->
+    <section id="view-student" class="view-section">
+      <div class="bg-white p-6 rounded-xl shadow-sm mb-6 text-center py-20">
+        <h2 class="text-3xl font-bold text-green-600 mb-2" id="student-welcome">歡迎！</h2>
+        <p class="text-gray-500 text-lg">學生測驗區建置中...</p>
+        <p class="text-gray-400 mt-4">請使用您分配到的帳號密碼登入。</p>
+      </div>
+    </section>
+
   </main>
 
   <script>
     /* =========================================
-       全局狀態與基礎設定
+       資料狀態管理 (In-Memory / LocalStorage)
     ========================================= */
-    const STATE = {
-      gasUrl: localStorage.getItem('gasUrl') || '',
-      user: JSON.parse(localStorage.getItem('user')) || null,
-      role: localStorage.getItem('role') || 'student',
-      loginTab: 'student', // 登入頁籤狀態
-      studentData: null // 存放載入的題庫
+    // 預設資料結構
+    const defaultData = {
+      teachers: [{ account: 'admin', password: 'admin', name: '管理員' }],
+      classes: [], // { id: 'c1', name: '一年甲班' }
+      students: [] // { account: 'S0101', name: '王小明', password: 'abc', classId: 'c1' }
     };
 
-    // 啟動時檢查
-    window.onload = () => {
-      if (!STATE.gasUrl) {
-        showMsg('歡迎使用', '請先點擊右上角 ⚙️ 設定您的後端 GAS 網址。');
-        showSettingsModal();
-      }
-      checkLoginState();
-      initCanvas(); // 初始化畫布
+    // 初始化資料
+    let db = JSON.parse(localStorage.getItem('readingAppDB')) || defaultData;
+    
+    function saveDB() {
+      localStorage.setItem('readingAppDB', JSON.stringify(db));
+    }
+
+    const STATE = {
+      user: null,
+      role: 'student',
+      loginTab: 'student',
+      currentClassId: null
     };
+
+    window.onload = () => { checkLoginState(); };
 
     /* =========================================
-       UI 與 Modal 控制
+       UI 共用工具
     ========================================= */
     function showMsg(title, content, type = 'info') {
       document.getElementById('msg-title').innerText = title;
@@ -250,133 +175,53 @@
       document.getElementById('msg-modal').classList.remove('hidden');
     }
     function closeMsgModal() { document.getElementById('msg-modal').classList.add('hidden'); }
-    function showSettingsModal() { 
-      document.getElementById('gas-url-input').value = STATE.gasUrl;
-      document.getElementById('settings-modal').classList.remove('hidden'); 
-    }
-    function showInfoModal() { document.getElementById('info-modal').classList.remove('hidden'); }
-
     function switchView(viewId) {
       document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
       document.getElementById(viewId).classList.add('active');
     }
 
-    function switchLoginTab(role) {
-      STATE.loginTab = role;
-      document.getElementById('tab-student').className = role === 'student' ? 'text-lg font-bold text-blue-600 border-b-2 border-blue-600 px-2 pb-1' : 'text-lg font-bold text-gray-400 px-2 pb-1';
-      document.getElementById('tab-teacher').className = role === 'teacher' ? 'text-lg font-bold text-blue-600 border-b-2 border-blue-600 px-2 pb-1' : 'text-lg font-bold text-gray-400 px-2 pb-1';
-      document.getElementById('lbl-account').innerText = role === 'student' ? '學生帳號 / 學號' : '教師帳號 (Email/ID)';
-      document.getElementById('teacher-register-area').style.display = role === 'teacher' ? 'block' : 'none';
-      document.getElementById('register-form').classList.add('hidden');
-    }
-
-    function toggleRegisterForm() {
-      document.getElementById('register-form').classList.toggle('hidden');
-    }
-
-    /* =========================================
-       設定管理
-    ========================================= */
-    function saveSettings() {
-      const url = document.getElementById('gas-url-input').value.trim();
-      if (!url.startsWith('https://script.google.com/')) {
-        showMsg('錯誤', '請輸入正確的 GAS Web App 網址', 'error');
-        return;
-      }
-      localStorage.setItem('gasUrl', url);
-      STATE.gasUrl = url;
-      document.getElementById('settings-modal').classList.add('hidden');
-      showMsg('成功', '系統設定已儲存！', 'success');
-      // 更新連結
-      document.getElementById('sheet-link').href = url.replace('/exec', '/edit'); 
-    }
-
-    function clearSettings() {
-      if (confirm('確定要清除所有設定與登入狀態嗎？將會重新整理頁面。')) {
-        localStorage.clear();
+    function clearAllData() {
+      if(confirm('警告：確定要刪除所有本機測試資料嗎？')) {
+        localStorage.removeItem('readingAppDB');
         location.reload();
       }
     }
 
     /* =========================================
-       API 呼叫封裝 (Fetch)
+       登入邏輯
     ========================================= */
-    async function callAPI(action, data = {}) {
-      if (!STATE.gasUrl) {
-        showMsg('錯誤', '請先設定 GAS 網址', 'error');
-        throw new Error('No GAS URL');
-      }
-      // 顯示載入中... (簡易處理)
-      const btn = document.activeElement;
-      const originalText = btn.innerText;
-      if (btn && btn.tagName === 'BUTTON') { btn.innerText = '處理中...'; btn.disabled = true; }
-
-      try {
-        const response = await fetch(STATE.gasUrl, {
-          method: 'POST',
-          body: JSON.stringify({ action: action, data: data })
-        });
-        const result = await response.json();
-        if (btn && btn.tagName === 'BUTTON') { btn.innerText = originalText; btn.disabled = false; }
-        return result;
-      } catch (error) {
-        if (btn && btn.tagName === 'BUTTON') { btn.innerText = originalText; btn.disabled = false; }
-        showMsg('連線錯誤', '無法連接到伺服器，請檢查網路或 GAS 網址。', 'error');
-        console.error(error);
-        throw error;
-      }
+    function switchLoginTab(role) {
+      STATE.loginTab = role;
+      document.getElementById('tab-student').className = role === 'student' ? 'text-lg font-bold text-blue-600 border-b-2 border-blue-600 px-2 pb-1' : 'text-lg font-bold text-gray-400 px-2 pb-1';
+      document.getElementById('tab-teacher').className = role === 'teacher' ? 'text-lg font-bold text-blue-600 border-b-2 border-blue-600 px-2 pb-1' : 'text-lg font-bold text-gray-400 px-2 pb-1';
+      document.getElementById('lbl-account').innerText = role === 'student' ? '學生帳號' : '教師帳號';
+      document.getElementById('teacher-hint').style.display = role === 'teacher' ? 'block' : 'none';
     }
 
-    /* =========================================
-       帳號權限邏輯
-    ========================================= */
-    async function initSystem() {
-      try {
-        const res = await callAPI('init');
-        showMsg('初始化結果', res.message, res.status);
-      } catch(e) {}
-    }
-
-    async function handleRegister(e) {
+    function handleLogin(e) {
       e.preventDefault();
-      const name = document.getElementById('reg-name').value;
-      const account = document.getElementById('reg-account').value;
-      const password = document.getElementById('reg-password').value;
+      const acc = document.getElementById('login-account').value.trim();
+      const pwd = document.getElementById('login-password').value.trim();
       
-      const res = await callAPI('registerTeacher', { name, account, password });
-      if (res.status === 'success') {
-        showMsg('註冊成功', '請使用剛建立的帳號登入', 'success');
-        document.getElementById('register-form').reset();
-        toggleRegisterForm();
+      let foundUser = null;
+      if (STATE.loginTab === 'teacher') {
+        foundUser = db.teachers.find(t => t.account === acc && t.password === pwd);
       } else {
-        showMsg('註冊失敗', res.message, 'error');
+        foundUser = db.students.find(s => s.account === acc && s.password === pwd);
       }
-    }
 
-    async function handleLogin(e) {
-      e.preventDefault();
-      const account = document.getElementById('login-account').value;
-      const password = document.getElementById('login-password').value;
-      
-      const res = await callAPI('login', { role: STATE.loginTab, account, password });
-      
-      if (res.status === 'success') {
-        STATE.user = res.user;
-        STATE.role = res.role;
-        localStorage.setItem('user', JSON.stringify(res.user));
-        localStorage.setItem('role', res.role);
-        
+      if (foundUser) {
+        STATE.user = foundUser;
+        STATE.role = STATE.loginTab;
         document.getElementById('login-form').reset();
         checkLoginState();
       } else {
-        showMsg('登入失敗', res.message, 'error');
+        showMsg('登入失敗', '帳號或密碼錯誤', 'error');
       }
     }
 
     function logout() {
       STATE.user = null;
-      localStorage.removeItem('user');
-      localStorage.removeItem('role');
       checkLoginState();
     }
 
@@ -385,16 +230,10 @@
         document.getElementById('logout-btn').classList.remove('hidden');
         if (STATE.role === 'teacher') {
           switchView('view-teacher');
-          document.getElementById('teacher-welcome').innerText = `歡迎回來，${STATE.user['教師姓名']} 老師！`;
-          // 設定直接開啟試算表的連結 (透過拆解 GAS 網址)
-          if(STATE.gasUrl) {
-            let match = STATE.gasUrl.match(/\/macros\/s\/(.+)\/exec/);
-            if(match) document.getElementById('sheet-link').href = `https://script.google.com/macros/s/${match[1]}/edit`;
-          }
+          renderClassList();
         } else {
           switchView('view-student');
-          document.getElementById('student-welcome').innerText = `歡迎，${STATE.user['學生姓名']} 同學！`;
-          loadStudentDashboard();
+          document.getElementById('student-welcome').innerText = `${STATE.user.name} 同學，歡迎！`;
         }
       } else {
         document.getElementById('logout-btn').classList.add('hidden');
@@ -403,236 +242,174 @@
     }
 
     /* =========================================
-       學生前台邏輯
+       教師後台 - 班級與學生管理
     ========================================= */
-    async function loadStudentDashboard() {
-      try {
-        const res = await callAPI('getStudentData');
-        if (res.status === 'success') {
-          STATE.studentData = res;
-          const select = document.getElementById('article-select');
-          select.innerHTML = '<option value="">-- 請選擇文章 --</option>';
-          res.articles.forEach(art => {
-            select.innerHTML += `<option value="${art['文章編號']}">${art['文章編號']} - ${art['文章標題']}</option>`;
-          });
+    // 產生隨機 6 碼英數密碼
+    function generateRandomPassword() {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+      let pwd = '';
+      for (let i = 0; i < 6; i++) {
+        pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return pwd;
+    }
+
+    // --- 班級操作 ---
+    function renderClassList() {
+      const list = document.getElementById('class-list');
+      list.innerHTML = '';
+      if (db.classes.length === 0) {
+        list.innerHTML = '<li class="text-gray-400 text-sm text-center py-4">尚無班級</li>';
+        return;
+      }
+
+      db.classes.forEach(c => {
+        const li = document.createElement('li');
+        const isActive = STATE.currentClassId === c.id;
+        li.className = `p-3 rounded cursor-pointer transition flex justify-between items-center ${isActive ? 'bg-blue-100 border-l-4 border-blue-500 font-bold' : 'bg-gray-50 hover:bg-gray-100'}`;
+        li.innerHTML = `<span>${c.name}</span> <span class="text-xs text-gray-400">${db.students.filter(s=>s.classId===c.id).length}人</span>`;
+        li.onclick = () => selectClass(c.id);
+        list.appendChild(li);
+      });
+    }
+
+    function addClass() {
+      const name = prompt('請輸入新班級名稱 (例如: 一年甲班)');
+      if (name && name.trim()) {
+        const newClass = { id: 'C' + Date.now(), name: name.trim() };
+        db.classes.push(newClass);
+        saveDB();
+        renderClassList();
+        selectClass(newClass.id);
+      }
+    }
+
+    function selectClass(classId) {
+      STATE.currentClassId = classId;
+      renderClassList(); // 更新左側 Highlight
+      
+      const c = db.classes.find(x => x.id === classId);
+      if (c) {
+        document.getElementById('student-manager-empty').classList.add('hidden');
+        document.getElementById('student-manager-content').classList.remove('hidden');
+        document.getElementById('current-class-name-display').innerText = `目前班級：${c.name}`;
+        renderStudentList();
+      }
+    }
+
+    function editCurrentClass() {
+      const c = db.classes.find(x => x.id === STATE.currentClassId);
+      if(!c) return;
+      const newName = prompt('修改班級名稱：', c.name);
+      if (newName && newName.trim()) {
+        c.name = newName.trim();
+        saveDB();
+        renderClassList();
+        document.getElementById('current-class-name-display').innerText = `目前班級：${c.name}`;
+      }
+    }
+
+    // --- 學生操作 ---
+    function renderStudentList() {
+      const tbody = document.getElementById('student-list-tbody');
+      tbody.innerHTML = '';
+      const studentsInClass = db.students.filter(s => s.classId === STATE.currentClassId);
+
+      if (studentsInClass.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-gray-400">尚無學生資料</td></tr>';
+        return;
+      }
+
+      // 排序一下，依據帳號
+      studentsInClass.sort((a,b) => a.account.localeCompare(b.account));
+
+      studentsInClass.forEach(s => {
+        const tr = document.createElement('tr');
+        tr.className = 'border-b hover:bg-gray-50';
+        tr.innerHTML = `
+          <td class="p-2">${s.account}</td>
+          <td class="p-2 font-medium">${s.name || '(未設定)'}</td>
+          <td class="p-2">
+             <span class="bg-gray-200 text-transparent hover:text-gray-800 cursor-pointer px-2 py-1 rounded select-all font-mono text-xs transition-colors" title="點擊顯示密碼">
+               ${s.password}
+             </span>
+          </td>
+          <td class="p-2">
+            <button onclick="editStudent('${s.account}')" class="text-blue-500 hover:underline text-xs mr-2">編輯</button>
+            <button onclick="deleteStudent('${s.account}')" class="text-red-500 hover:underline text-xs">刪除</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function batchCreateStudents() {
+      if (!STATE.currentClassId) return;
+      
+      const count = parseInt(document.getElementById('batch-student-count').value) || 0;
+      const prefix = document.getElementById('batch-student-prefix').value.trim();
+      
+      if (count <= 0 || !prefix) {
+        alert('請輸入有效的數量與前綴。'); return;
+      }
+
+      // 尋找目前的流水號最大值，避免重複
+      let currentMax = 0;
+      db.students.forEach(s => {
+        if(s.account.startsWith(prefix)) {
+          const numPart = parseInt(s.account.replace(prefix, ''));
+          if(!isNaN(numPart) && numPart > currentMax) currentMax = numPart;
         }
-      } catch(e) {}
-    }
-
-    function loadArticleTest() {
-      const artId = document.getElementById('article-select').value;
-      const testArea = document.getElementById('test-area');
-      
-      if (!artId) { testArea.classList.add('hidden'); return; }
-      
-      const data = STATE.studentData;
-      const article = data.articles.find(a => a['文章編號'] === artId);
-      
-      document.getElementById('current-article-id').value = artId;
-      document.getElementById('display-article-title').innerText = article['文章標題'];
-      document.getElementById('display-article-content').innerText = article['文章內容'];
-      
-      // 動態生成題目
-      const qContainer = document.getElementById('questions-container');
-      qContainer.innerHTML = '';
-      
-      // 是非題
-      const tfs = data.questions.tf.filter(q => q['文章編號'] === artId);
-      tfs.forEach((q, i) => {
-        qContainer.innerHTML += `
-          <div class="bg-white p-4 rounded-lg border border-gray-200">
-            <p class="font-bold mb-2"><span class="text-blue-500 mr-1">Q${i+1}. (是非)</span> ${q['題目內容']}</p>
-            <div class="flex gap-4">
-              <label class="flex items-center gap-1 cursor-pointer"><input type="radio" name="tf_${q['題目編號']}" value="O" required class="w-4 h-4"> O (是)</label>
-              <label class="flex items-center gap-1 cursor-pointer"><input type="radio" name="tf_${q['題目編號']}" value="X" required class="w-4 h-4"> X (否)</label>
-            </div>
-          </div>`;
       });
 
-      // 選擇題
-      const mcs = data.questions.mc.filter(q => q['文章編號'] === artId);
-      mcs.forEach((q, i) => {
-        const opts = String(q['選項']).split(',').map(o => o.trim());
-        let optsHtml = opts.map(o => `
-          <label class="block cursor-pointer p-2 hover:bg-gray-50 rounded border border-transparent hover:border-gray-200 transition">
-            <input type="radio" name="mc_${q['題目編號']}" value="${o}" required class="mr-2">${o}
-          </label>
-        `).join('');
-        qContainer.innerHTML += `
-          <div class="bg-white p-4 rounded-lg border border-gray-200">
-            <p class="font-bold mb-2"><span class="text-green-500 mr-1">Q${tfs.length+i+1}. (選擇)</span> ${q['題目內容']}</p>
-            <div class="space-y-1">${optsHtml}</div>
-          </div>`;
-      });
-
-      // 問答題
-      const sas = data.questions.sa.filter(q => q['文章編號'] === artId);
-      sas.forEach((q, i) => {
-        qContainer.innerHTML += `
-          <div class="bg-white p-4 rounded-lg border border-gray-200">
-            <p class="font-bold mb-2"><span class="text-purple-500 mr-1">Q${tfs.length+mcs.length+i+1}. (問答)</span> ${q['題目內容']}</p>
-            <textarea name="sa_${q['題目編號']}" rows="3" required class="w-full p-2 border rounded focus:ring focus:ring-blue-200"></textarea>
-          </div>`;
-      });
-
-      // 塗鴉題處理
-      const draws = data.questions.draw.filter(q => q['文章編號'] === artId);
-      const drawArea = document.getElementById('draw-area-container');
-      if (draws.length > 0) {
-        document.getElementById('draw-question-text').innerText = draws[0]['題目內容'];
-        drawArea.classList.remove('hidden');
-        clearCanvas(); // 清空舊畫布
-      } else {
-        drawArea.classList.add('hidden');
-      }
-
-      // 重置圖片上傳區
-      document.getElementById('proof-upload').value = '';
-      document.getElementById('proof-base64').value = '';
-      document.getElementById('preview-container').classList.add('hidden');
-
-      testArea.classList.remove('hidden');
-    }
-
-    /* =========================================
-       Canvas 塗鴉邏輯
-    ========================================= */
-    let canvas, ctx, isDrawing = false;
-    let currentStrokeColor = '#000000';
-
-    function initCanvas() {
-      canvas = document.getElementById('drawing-canvas');
-      ctx = canvas.getContext('2d');
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.lineWidth = 3;
-
-      // Mouse Events
-      canvas.addEventListener('mousedown', startPosition);
-      canvas.addEventListener('mouseup', endPosition);
-      canvas.addEventListener('mousemove', draw);
-      // Touch Events
-      canvas.addEventListener('touchstart', (e) => { e.preventDefault(); startPosition(e.touches[0]); }, {passive: false});
-      canvas.addEventListener('touchend', endPosition);
-      canvas.addEventListener('touchmove', (e) => { e.preventDefault(); draw(e.touches[0]); }, {passive: false});
-    }
-
-    function getMousePos(evt) {
-      const rect = canvas.getBoundingClientRect();
-      // 處理 CSS 縮放導致的座標偏移
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
-      return {
-        x: (evt.clientX - rect.left) * scaleX,
-        y: (evt.clientY - rect.top) * scaleY
-      };
-    }
-
-    function startPosition(e) { isDrawing = true; draw(e); }
-    function endPosition() { isDrawing = false; ctx.beginPath(); }
-    function draw(e) {
-      if (!isDrawing) return;
-      const pos = getMousePos(e);
-      ctx.strokeStyle = currentStrokeColor;
-      ctx.lineTo(pos.x, pos.y);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(pos.x, pos.y);
-    }
-    function setDrawColor(color) { currentStrokeColor = color; }
-    function clearCanvas() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
-
-    /* =========================================
-       圖片壓縮與上傳 (400px)
-    ========================================= */
-    function handleImageUpload(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        const img = new Image();
-        img.onload = function() {
-          const cvs = document.createElement('canvas');
-          const maxW = 400;
-          let w = img.width, h = img.height;
-          if (w > maxW) { h *= maxW / w; w = maxW; }
-          cvs.width = w; cvs.height = h;
-          const context = cvs.getContext('2d');
-          context.drawImage(img, 0, 0, w, h);
-          
-          const base64Str = cvs.toDataURL('image/jpeg', 0.8);
-          document.getElementById('proof-base64').value = base64Str;
-          document.getElementById('proof-preview').src = base64Str;
-          document.getElementById('preview-container').classList.remove('hidden');
+      let addedCount = 0;
+      for (let i = 1; i <= count; i++) {
+        const numStr = String(currentMax + i).padStart(2, '0'); // 例如: 01, 02
+        const newAccount = prefix + numStr;
+        
+        // 防呆: 確定帳號沒重複
+        if(!db.students.find(s => s.account === newAccount)) {
+           db.students.push({
+             account: newAccount,
+             name: `學生_${newAccount}`, // 預設名稱
+             password: generateRandomPassword(),
+             classId: STATE.currentClassId
+           });
+           addedCount++;
         }
-        img.src = e.target.result;
       }
-      reader.readAsDataURL(file);
+
+      saveDB();
+      renderStudentList();
+      renderClassList(); // 更新人數顯示
+      showMsg('批次建立成功', `已成功建立 ${addedCount} 筆學生資料。`, 'success');
     }
 
-    /* =========================================
-       提交測驗
-    ========================================= */
-    async function submitTest(e) {
-      e.preventDefault();
+    function editStudent(account) {
+      const s = db.students.find(x => x.account === account);
+      if(!s) return;
       
-      const formData = new FormData(e.target);
-      const tfAnswers = {}, mcAnswers = {}, saAnswers = {};
-      
-      // 分類提取答案
-      for (let [key, value] of formData.entries()) {
-        if (key.startsWith('tf_')) tfAnswers[key.replace('tf_', '')] = value;
-        else if (key.startsWith('mc_')) mcAnswers[key.replace('mc_', '')] = value;
-        else if (key.startsWith('sa_')) saAnswers[key.replace('sa_', '')] = value;
-      }
-
-      // 處理塗鴉圖片
-      const drawArea = document.getElementById('draw-area-container');
-      let drawImage = '';
-      if (!drawArea.classList.contains('hidden')) {
-        // 確保背景是白色的
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = canvas.width; tempCanvas.height = canvas.height;
-        const tempCtx = tempCanvas.getContext('2d');
-        tempCtx.fillStyle = '#ffffff';
-        tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-        tempCtx.drawImage(canvas, 0, 0);
-        drawImage = tempCanvas.toDataURL('image/jpeg', 0.8);
-      }
-
-      const payload = {
-        studentAccount: STATE.user['學生帳號'],
-        articleId: document.getElementById('current-article-id').value,
-        tfAnswers, mcAnswers, saAnswers,
-        drawImage,
-        proofImage: document.getElementById('proof-base64').value
-      };
-
-      try {
-        const res = await callAPI('submitTest', payload);
-        if (res.status === 'success') {
-          showMsg('測驗完成', `太棒了！你的成績是：${res.score}`, 'success');
-          document.getElementById('test-area').classList.add('hidden');
-          document.getElementById('article-select').value = '';
+      const newName = prompt(`修改 [${s.account}] 的姓名：`, s.name);
+      if (newName !== null) { // 允許空白但不允許 null(取消)
+        s.name = newName.trim();
+        
+        // 詢問是否重設密碼
+        if(confirm(`是否要為 ${s.account} 重新產生一組隨機密碼？`)) {
+          s.password = generateRandomPassword();
         }
-      } catch (err) {}
+        
+        saveDB();
+        renderStudentList();
+      }
     }
 
-    /* =========================================
-       其他輔助功能
-    ========================================= */
-    function copyGasCode() {
-      // 提供一段純文字提示，實務上可把 Code.gs 包在此以供複製
-      const dummyCode = `// 雲端閱讀認證測驗系統 - 後端 API
-// 請參閱對話框提供的 Code.gs 檔案內容，複製並貼上至 Apps Script 編輯器中。`;
-      navigator.clipboard.writeText(dummyCode).then(() => {
-        alert("提示：請直接複製對話記錄中生成的 Code.gs 內容！");
-      });
+    function deleteStudent(account) {
+      if(confirm(`確定要刪除學生 [${account}] 嗎？`)) {
+        db.students = db.students.filter(x => x.account !== account);
+        saveDB();
+        renderStudentList();
+        renderClassList();
+      }
     }
   </script>
 </body>
